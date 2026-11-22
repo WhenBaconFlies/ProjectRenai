@@ -79,6 +79,15 @@ Records the clarification decisions made during the brainstorming session.
 - **Issue tracker:** GitHub repo created; spec published as an issue with `ready-for-agent` label.
 - **User stories depth:** Extensive — covers movement, interaction, dialogue, relationships, save/load, modding, NPC AI, attendance, mood, stats, camera, minimap.
 
+### to-tickets decisions
+- **Ticket location:** `doc/tickets/` (user-specified; overrides skill's default `.scratch/.../issues/`).
+- **Ticket count:** 18 tickets, finer-grained than the initial 10-ticket proposal.
+- **Granularity:** ~18 tickets accepted by user; each independently shippable and verifiable.
+- **Blocking edges:** Each ticket depends only on tickets that genuinely gate it; parallelizable siblings (004/005/006, all blocked only by 001) can be built concurrently.
+- **Base content authoring (007):** Separate ticket, as requested.
+- **Acceptance verification (018):** Final integration ticket owns verifying all 10 acceptance criteria; each prior ticket also has its own acceptance criteria.
+- **Ticket format:** one file per ticket, named `<NN>-<short-description>.md`, using the local-ticket template (What to build, Blocked by, Status, acceptance criteria checkboxes).
+
 ### Deferred (non-goals for v1)
 - Main/New Game/Load/Create/Mods/Options menus (functional).
 - Character/map creation tools and map editor.
