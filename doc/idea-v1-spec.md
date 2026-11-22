@@ -53,7 +53,11 @@ NPCs can initiate interactions with the player or other NPCs; the dialogue pipel
 29. As a developer, I want attendance simulated for NPCs (perfect in v1), so that the grade stub has data to work with.
 30. As a player, I want mood to affect which dialogue is available, so that emotional context matters.
 31. As a player, I want music and sound effects, so that the game has atmosphere.
-32. As a player, I want the UI to be simple but cute, so that the experience is pleasant.
+33. As a player, I want large maps to load smoothly without lag, so that after-school areas can be expansive.
+34. As a player, I want distant NPCs to keep their identity and relationships even when far away, so that romance persists across the map.
+35. As a player, I want to tune optimization settings (view distance, simulation detail), so that the game runs well on my hardware.
+36. As a developer, I want a ChunkManager that tiers NPC simulation by distance, so that 100s of NPCs can be supported on large maps.
+37. As a developer, I want chunks to be a fixed tile grid auto-derived from map dimensions, so that chunk size is consistent across maps.
 
 ## Implementation Decisions
 
@@ -86,6 +90,22 @@ NPCs can initiate interactions with the player or other NPCs; the dialogue pipel
 - **Audio & localization:** music + SFX (volume in Options; can be stubbed in v1); English only (v1), framework ready.
 - **Languages:** GDScript (gameplay/UI, editor tooling) + C# (data-heavy systems, registries, save serialization); interop via Godot's bridge; keep boundary at data/registry seams, not per-frame gameplay.
 - **Launch (v1):** minimal debug launcher scene `DebugStart.tscn` auto-starts a default day (default map + player + 3–5 NPCs), no menu flow. Base resources authored by developer in the Godot editor; plan provides schema + checklist. Autoloads handle "no save / fresh start" path.
+- **Chunk loading (planned, post-v1 optimization, Plan D hybrid):**
+  - **Chunk:** fixed tile grid, same size/shape across maps (map dimensions vary). Centered on the player with a buffer for pop-in prevention.
+  - **Tiers:** Close (full sim + full render), Near (full NPC state, reduced tick rate, objects hidden, simplified collision), Far (identity preserved, tick rarely with large dt, coarse position, no render, coarse pathfinding).
+  - **Promotion/demotion:** hysteresis (promote at inner radius, demote at outer radius + 1 chunk buffer); promotion interpolates position over ~0.5s.
+  - **Tier radii:** chunk-radius based, configurable by player (optimization setting) with defaults (close 2, near 4, far beyond).
+  - **Tick rates:** configurable; defaults close=every frame/period, near=every N frames/seconds, far=every 5–10s with large dt.
+  - **`ChunkManager` autoload:** owns tier assignment, promotion/demotion with hysteresis, and the NPC tick scheduler. Config-level support for radii/tick rates; Options UI wiring deferred (surface feature).
+  - **Map schema:** `chunk_size` (tiles) + derived chunk grid dimensions. Map renderer loads/unloads chunks around the player (Godot native culling for tiles; manual unload only beyond far threshold).
+  - **NpcInstance additions:** runtime-only `tier` (close/near/far) and `coarse_position` (far); not persisted (recomputed on load).
+  - **Interaction guard:** only close-tier NPCs are interactable; attempting to interact with a near NPC promotes it first.
+  - **Save/load:** store all NPC state; tiers recomputed from player spawn position on load.
+  - **Cross-chunk pathfinding (far):** coarse (straight-line), no per-object collision.
+  - **Memory:** all NPC state in memory (v1); disk streaming deferred.
+  - **Map editor:** chunks auto-derived from map dimensions + chunk size; editor shows chunk grid overlay.
+  - **Scale target:** future very-large maps + 100s of NPCs (after-school activities); rates tunable then.
+
 - **Minor implementation calls (recorded):**
   - Base content lives under `res://resources/` loaded directly; ModLoader exercised by one sample mod under `res://mods/`.
   - `Item` carries a `PackedScene` reference for instantiation.
@@ -109,6 +129,7 @@ NPCs can initiate interactions with the player or other NPCs; the dialogue pipel
   8. Skip advances to the next period boundary.
   9. Attendance + grade stub runs on period change without errors.
   10. Code is commented describing functions/scripts.
+11. (Post-v1, chunk loading) Chunk loading seams exist: `ChunkManager` autoload present (stub OK in v1), `chunk_size` field on `Map`, tier field on `NpcInstance`, hysteresis promotion/demotion documented. Full chunk-loading verification is a post-v1 acceptance item.
 
 ## Out of Scope
 
@@ -121,6 +142,9 @@ NPCs can initiate interactions with the player or other NPCs; the dialogue pipel
 - NPC override of existing resources by ID.
 - NPC→NPC interactions beyond the single-initiator random-pick model (no complex negotiation).
 - Network/HTTP endpoints (none; game is local).
+- Chunk loading implementation (ChunkManager, tiered simulation, chunk-aware renderer, chunk grid overlay) — planned optimization; seams designed now, full implementation post-v1.
+- Disk streaming of far chunks (deferred; in-memory for v1).
+- Options UI for optimization settings (tier radii/tick rates) — deferred surface feature; config-level support in ChunkManager.
 
 ## Further Notes
 

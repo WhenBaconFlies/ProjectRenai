@@ -89,6 +89,20 @@ Records the clarification decisions made during the brainstorming session.
 - **Ticket format:** one file per ticket, named `<NN>-<short-description>.md`, using the local-ticket template (What to build, Blocked by, Status, acceptance criteria checkboxes).
 - **GitHub issues:** 18 issues created (#2–#19) as sub-issues of spec #1, with `ready-for-agent` label and native blocked-by edges. Issue numbers map 001→#2 … 018→#19.
 
+### Chunk loading (planned, post-v1 optimization)
+- **Plan D (hybrid) chosen.** Close tier: full sim + full render. Near tier: full NPC state, reduced tick rate, objects hidden, simplified collision. Far tier: identity preserved, tick rarely with large dt, coarse position, no render, coarse pathfinding.
+- **Chunk:** fixed tile grid, same size/shape across maps (map dimensions vary).
+- **Center of loading:** player position, with buffer for pop-in prevention.
+- **Tier distances:** chunk-radius based, configurable by player (optimization setting), with sensible defaults. Close radius 2, near radius 4, far beyond.
+- **Hysteresis:** promote at inner radius, demote at outer radius + 1 chunk buffer. Promotion interpolates position over ~0.5s.
+- **Far-NPC fidelity:** keep full identity/state (no zone abstraction); tick every ~5–10s with large dt; coarse (straight-line) pathfinding.
+- **Interaction guard:** only close-tier NPCs interactable; attempting to interact with a near NPC promotes it first (safety net for tier-update lag, small close radius, NPC-initiated, zoomed-out camera).
+- **Memory:** all NPC state in memory (v1); disk streaming deferred.
+- **Save/load:** store all NPC state; tiers recomputed from player spawn position on load.
+- **Scale target:** future very-large maps + 100s of NPCs (after-school activities); rates tunable then.
+- **Config:** tier radii and tick rates as settings (Options UI wiring deferred; config-level support in ChunkManager).
+- **Map editor:** chunks auto-derived from map dimensions + chunk size; editor shows chunk grid overlay.
+
 ### Deferred (non-goals for v1)
 - Main/New Game/Load/Create/Mods/Options menus (functional).
 - Character/map creation tools and map editor.

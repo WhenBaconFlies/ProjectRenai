@@ -155,6 +155,9 @@ Follow player with smoothing (Camera2D with smoothing). Minimap as a secondary v
 ### 5.12 Mood
 Numeric 0–100, clamped. Affects dialogue eligibility and (lightly) stat checks. Updated by interaction outcomes.
 
+### 5.13 Chunk loading (planned, post-v1 optimization)
+Fixed tile grid chunks (same size/shape across maps; map dimensions vary). Centered on the player with a buffer for pop-in prevention. Three tiers: Close (full sim + full render), Near (full NPC state, reduced tick rate, objects hidden, simplified collision), Far (identity preserved, tick rarely with large dt, coarse position, no render, coarse pathfinding). Promotion/demotion uses hysteresis (promote at inner radius, demote at outer radius + buffer); promotion interpolates position over ~0.5s. Tier radii and tick rates are configurable by the player (optimization setting); defaults provided. Only close-tier NPCs are interactable; attempting to interact with a near NPC promotes it first. NPC state stays in memory (v1); disk streaming deferred. Far-future goal: extend maps beyond school (very large maps, 100s of NPCs); rates tunable then. All NPC state stored on save; tiers recomputed from player spawn position on load.
+
 ## 6. Core loop (the vertical slice)
 
 1. Load map `.tres` → renderer builds tilemap + objects + navmesh.
@@ -187,6 +190,7 @@ Numeric 0–100, clamped. Affects dialogue eligibility and (lightly) stat checks
 - **Placed map objects:** The `Item` resource carries a `PackedScene` reference (plus sprite/collider data) that the renderer instantiates. Aligns the Item schema and renderer contract.
 - **NPC attendance (v1):** Simulated but perfect — NPCs' only goal is to attend class; no repercussions. Grade stub uses attendance + INT/WIS → small stat bonus (player only; NPC grades not surfaced).
 - **NPC-initiated interaction targeting:** Can target player or other NPCs (pair-agnostic pipeline). Initiation gated by outgoingness trait + not-busy + target chosen by familiarity/outgoingness.
+- **Chunk loading (post-v1):** Fixed tile grid chunks, same size/shape across maps; player-centered with buffer. Tier radii and tick rates configurable by player (optimization setting) with defaults. Hysteresis buffer of 1 chunk (promote at inner radius, demote at outer+1). Promotion interpolates position over ~0.5s. Far NPCs use coarse (straight-line) pathfinding. Near-chunk collision is simplified (no per-furniture). Interaction guard promotes near NPC on interaction attempt. Disk streaming deferred; in-memory for v1. Config-level support in ChunkManager; Options UI wiring deferred to surface feature.
 
 ## 8. Approval
 
@@ -200,3 +204,4 @@ This design is a proposal. Please confirm or correct before I (or a plan) procee
 - Mod loader with `mod.json`, dependencies, enable/disable, add-only.
 - Debug launcher `DebugStart.tscn`; base resources authored in editor.
 - NPC attendance simulated (perfect) in v1.
+- Chunk loading (post-v1): fixed tile grid, player-centered with buffer, three tiers with hysteresis, promotion interpolation, coarse pathfinding, configurable radii, interaction guard, in-memory (disk streaming deferred).

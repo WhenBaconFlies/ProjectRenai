@@ -24,6 +24,7 @@ A modular 2D quarter-view life-simulation game where the player lives a school y
 - `ModLoader` — scans `res://mods/`, registers resources/scripts
 - `AudioManager` — music/SFX, volume
 - `LocalizationManager` — string tables (English v1)
+- `ChunkManager` — (planned, post-v1 seam) tier assignment, promotion/demotion with hysteresis, and NPC tick scheduler for chunk loading. Designed now; not required for v1.
 
 ### Scene flow
 MainMenu → NewGame (map → save options → character) → Game (play) → (autosave/manual at day end) → next day or quit.
@@ -96,6 +97,16 @@ Volume, language (English v1), resolution, and other game-wide options.
 ### Audio
 - Music + SFX. Volume controlled in Options.
 
+### Chunk loading (planned, post-v1 optimization)
+- Fixed tile grid chunks (same size/shape across maps; map dimensions vary). Chunk loading is centered on the player with a buffer for pop-in prevention.
+- Three tiers: **Close** (full sim + full render), **Near** (full NPC state, reduced tick rate, objects hidden, simplified collision), **Far** (identity preserved, tick rarely with large dt, coarse position, no render, coarse pathfinding).
+- Promotion/demotion uses hysteresis (promote at inner radius, demote at outer radius + buffer); promotion interpolates position over ~0.5s.
+- Tier radii and tick rates are configurable by the player (optimization setting); defaults provided.
+- Only close-tier NPCs are interactable; attempting to interact with a near NPC promotes it first.
+- NPC state stays in memory (v1); disk streaming deferred.
+- Far-future goal: extend maps beyond school for after-school activities (very large maps, 100s of NPCs); rates tunable then.
+- All NPC state stored on save; tiers recomputed from player spawn position on load.
+
 ## 10. Open / Deferred (post-v1)
 - Exact trait list and point costs (data files).
 - Exact resource schema field lists.
@@ -103,3 +114,6 @@ Volume, language (English v1), resolution, and other game-wide options.
 - Performance for >30 NPCs.
 - Additional languages.
 - Full academic system, combat, deeper AI.
+- Chunk loading implementation (ChunkManager, tiered simulation, chunk-aware renderer, chunk grid overlay) — planned optimization; seams designed now.
+- Disk streaming of far chunks (deferred; in-memory for v1).
+- Options UI for optimization settings (tier radii/tick rates) — deferred surface feature; config-level support in ChunkManager.
