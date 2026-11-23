@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="CharacterTemplate" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterTemplate.gd" id="1_char_sample"]
+[ext_resource type="Resource" path="res://mods/sample_mod/trait_sample.tres" id="2_trait_sample"]
+
+[resource]
+script = ExtResource("1_char_sample")
+id = "char:mod_sample"
+display_name = "Sam (Sample Mod)"
+gender = "female"
+orientation = "bi"
+hair = "ponytail"
+eyes = "green"
+mouth = "smile"
+skin_tone = "medium"
+outfit = "casual"
+traits = [ExtResource("2_trait_sample")]
+strength = 4
+dexterity = 6
+constitution = 5
+intelligence = 5
+wisdom = 5
+charisma = 7
+strength_growth = 1.0
+dexterity_growth = 1.0
+constitution_growth = 1.0
+intelligence_growth = 1.0
+wisdom_growth = 1.0
+charisma_growth = 1.1
+trait_point_cost = 1
