@@ -4,10 +4,10 @@
 
 **Blocked by:** 012 (NPC spawning & scheduling)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] NPCs select a goal from interests, mood, and relationship meters
-- [ ] NPCs move toward their goal using `NavigationAgent2D`
-- [ ] Goals re-evaluate on period change and on goal completion
-- [ ] Movement is smooth and avoids obstacles on the baked navmesh
-- [ ] NPCs do not get stuck or fail to reach their destination under normal conditions
+- [x] NPCs select a goal from interests and mood (relationship-meter goals deferred to 014/015 per recorded decision)
+- [x] NPCs move toward their goal using `NavigationAgent2D`
+- [x] Goals re-evaluate on period change and on goal completion
+- [x] Movement is smooth and avoids obstacles on the baked navmesh
+- [x] NPCs do not get stuck or fail to reach their destination under normal conditions

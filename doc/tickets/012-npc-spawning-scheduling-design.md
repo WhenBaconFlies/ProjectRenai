@@ -65,8 +65,11 @@ Before `TimeManager.start_day(1)`:
 - `TimeManager.set_roster("player", [npc instance ids...])`;
 - `TimeManager.set_stats_provider()` backed by `NpcInstance.stats` (player falls back
   to `TimeManager.player_template_path`, matching ticket 011);
-- connect `TimeManager.state_changed` so entering a period calls `Npc.move_to()` with
-  the instance's scheduled marker (falling back to the map spawn point with a warning).
+- connect `TimeManager.state_changed` so entering a class period sends NPCs to
+  the instance's scheduled marker (falling back to the map spawn point with a
+  warning). Originally this was an instant `Npc.move_to()`; user-approved change
+  after ticket 013 makes NPCs walk there instead (`set_forced_destination()`),
+  with `move_to()` retained as the skip-transition hard snap.
 
 Because all of this happens in `Game._ready()` before `start_day()`, the initial
 `PERIOD1` transition is observed and NPCs move to class immediately.
@@ -86,7 +89,7 @@ mods are enabled. `char:alex` is reserved for the player; the sample mod's
 |----------|------------|
 | 3–5 NPCs spawn from template IDs at map spawn | `NpcSpawner.spawn()` from 4 ids |
 | Per-instance schedule (period → named marker) | `NpcInstance.schedule` + `Map.markers` |
-| NPCs move to class location on period change | `Game._on_state_changed()` → `Npc.move_to()` |
+| NPCs move to class location on period change | `Game._on_state_changed()` → class travel via `Npc.set_forced_destination()` (supersedes the original instant `Npc.move_to()`; skipped transitions still snap) |
 | Attendance recorded per NPC per period | `TimeManager.set_roster()` + existing records |
 | Template referenced by stable ID | `NpcInstance.template_id` |
 | Runtime-only `tier` (default close) | unexported `NpcInstance.tier` |

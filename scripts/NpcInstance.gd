@@ -54,8 +54,13 @@ const TIER_FAR: String = "far"
 ## World-space position. Authoritative instance position; the scene node mirrors it.
 @export var position: Vector2 = Vector2.ZERO
 
-## Reserved for ticket 013's goal-driven AI. Empty in v1.
+## Active free-time goal, structured as "hangout:<marker_name>" (ticket 013).
+## Empty while the NPC is idle or in class.
 @export var current_goal: String = ""
+
+## World-space destination of `current_goal`. Exported so ticket 017 can restore
+## an in-flight goal instead of silently dropping it on load.
+@export var goal_destination: Vector2 = Vector2.ZERO
 
 
 ## --- Runtime-only (not persisted) ------------------------------------------
@@ -164,6 +169,7 @@ func snapshot() -> Dictionary:
 		"schedule": schedule.duplicate(true),
 		"position": position,
 		"current_goal": current_goal,
+		"goal_destination": goal_destination,
 	}
 
 
@@ -186,4 +192,6 @@ static func from_snapshot(data: Dictionary) -> NpcInstance:
 	var pos: Variant = data.get("position", Vector2.ZERO)
 	instance.position = pos if pos is Vector2 else Vector2.ZERO
 	instance.current_goal = str(data.get("current_goal", ""))
+	var goal_pos: Variant = data.get("goal_destination", Vector2.ZERO)
+	instance.goal_destination = goal_pos if goal_pos is Vector2 else Vector2.ZERO
 	return instance

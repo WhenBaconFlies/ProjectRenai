@@ -60,6 +60,53 @@ extends Resource
 @export var markers: Dictionary = {}
 
 
+## --- Hangout spots (ticket 013) ---------------------------------------------
+
+## Prefix that distinguishes free-time hangout markers from class markers.
+const HANGOUT_PREFIX: String = "hangout_"
+
+## Interest ids/tags for each hangout marker name, e.g.
+## { "hangout_library": PackedStringArray("academic", "study", "quiet") }.
+## Read by NpcAi to bias free-time goals toward an NPC's interest traits.
+@export var hangout_interests: Dictionary = {}
+
+
+## Sorted names of the free-time hangout markers on this map.
+func get_hangout_marker_names() -> Array:
+	var names: Array = []
+	for key in markers.keys():
+		var marker_name: String = str(key)
+		if marker_name.begins_with(HANGOUT_PREFIX):
+			names.append(marker_name)
+	names.sort()
+	return names
+
+
+## Interest ids/tags authored for `marker_name` (empty when none are authored).
+func get_hangout_interests(marker_name: String) -> PackedStringArray:
+	var value: Variant = hangout_interests.get(marker_name, [])
+	if value is PackedStringArray:
+		return value
+	if value is Array:
+		var tags := PackedStringArray()
+		for tag in (value as Array):
+			tags.append(str(tag))
+		return tags
+	return PackedStringArray()
+
+
+## Marker names eligible for class schedules. Hangouts are free-time-only and
+## must not leak into ticket 012's per-period schedules.
+func get_schedule_marker_names() -> Array:
+	var names: Array = []
+	for key in markers.keys():
+		var marker_name: String = str(key)
+		if not marker_name.begins_with(HANGOUT_PREFIX):
+			names.append(marker_name)
+	names.sort()
+	return names
+
+
 ## --- Navigation mesh ---
 
 ## Baked navigation polygon used by NavigationAgent2D for pathfinding.

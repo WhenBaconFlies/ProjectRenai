@@ -130,7 +130,17 @@ markers = {
 "classroom_a": Vector2(56, 40),
 "classroom_b": Vector2(100, 40),
 "classroom_c": Vector2(56, 88),
-"classroom_d": Vector2(100, 88)
+"classroom_d": Vector2(100, 88),
+"hangout_cafeteria": Vector2(72, 96),
+"hangout_courtyard": Vector2(112, 56),
+"hangout_garden": Vector2(40, 96),
+"hangout_library": Vector2(60, 72)
+}
+hangout_interests = {
+"hangout_cafeteria": PackedStringArray("social", "food"),
+"hangout_courtyard": PackedStringArray("sports", "active", "social"),
+"hangout_garden": PackedStringArray("quiet", "nature", "calm"),
+"hangout_library": PackedStringArray("academic", "study", "quiet")
 }
 navigation_mesh = SubResource("NavigationPolygon_stmyk")
 chunk_size = 32

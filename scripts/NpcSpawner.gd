@@ -48,7 +48,9 @@ func spawn(parent: Node2D, map: Map, template_ids: Array) -> Array:
 		return []
 
 	var spawn_point: Vector2 = map.spawn_point if map != null else Vector2.ZERO
-	var marker_names: Array = map.get_marker_names() if map != null else []
+	# Class schedules use only classroom markers; hangout_* markers are
+	# free-time-only destinations introduced by ticket 013.
+	var marker_names: Array = map.get_schedule_marker_names() if map != null else []
 	if marker_names.is_empty():
 		push_warning("NpcSpawner: map has no named markers; schedules will use the spawn point")
 

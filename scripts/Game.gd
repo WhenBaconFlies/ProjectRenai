@@ -5,10 +5,11 @@
 ## TimeManager emits day_started / state_changed for day 1.
 ##
 ## Ticket 012 owns NPC lifecycle here: spawn NPCs from template ids, register
-## their stable instance ids with TimeManager, provide instance-backed stats for
-## the attendance/grade stub, and move NPCs to their scheduled class marker on
-## period change. All of this happens BEFORE start_day() so the initial PERIOD1
-## transition is observed and NPCs are seated immediately.
+## their stable instance ids with TimeManager, and provide instance-backed stats
+## for the attendance/grade stub. Ticket 013 adds free-time AI and class travel:
+## NPCs walk to their next class marker in the final seconds of free time and
+## finish the walk at class start; skipped transitions still hard-snap. All of
+## this happens BEFORE start_day() so the initial PERIOD1 transition is observed.
 extends Node2D
 
 ## Roster id for the player. Mirrors TimeManager's exported default; the player
@@ -16,11 +17,22 @@ extends Node2D
 ## a template-backed stats fallback are needed.
 const FALLBACK_PLAYER_ID: String = "player"
 
+## Seconds before a class period starts that NPCs begin walking to their
+## scheduled marker. On the small v1 map a walk takes ~1–2 s, so this lead gives
+## them time to be seated well before the end-of-class attendance check.
+@export var class_travel_lead_sec: float = 4.0
+
 
 var _npcs: Array = []
 var _instances_by_id: Dictionary = {}
 var _map: Map = null
 var _spawner: NpcSpawner = null
+
+## Guards the per-frame "free time nearly over" check to one departure per phase.
+var _class_travel_issued: bool = false
+## Set by skip_simulation_requested; consumed on the next state_changed so a
+## skipped class transition hard-snaps instead of simulating the walk.
+var _skip_pending: bool = false
 
 
 func _ready() -> void:
@@ -64,12 +76,73 @@ func _setup_npcs() -> void:
 func _time_connect() -> void:
 	if not TimeManager.state_changed.is_connected(_on_state_changed):
 		TimeManager.state_changed.connect(_on_state_changed)
+	if not TimeManager.skip_simulation_requested.is_connected(_on_skip_requested):
+		TimeManager.skip_simulation_requested.connect(_on_skip_requested)
 
 
 ## Current player roster id, honouring TimeManager's exported override.
 func _player_id() -> String:
 	var configured: String = TimeManager.player_character_id
 	return configured if not configured.is_empty() else FALLBACK_PLAYER_ID
+
+
+## True for FREETIME1/2/3. state_changed fires after TimeManager updates its
+## state, so get_state_name() reflects `state`; the string check avoids depending
+## on autoload enum access from a scene script.
+func _is_free_time_state(state: int) -> bool:
+	return state > 0 and TimeManager.get_state_name().begins_with("FREETIME")
+
+
+## Issue class travel once, in the final `class_travel_lead_sec` of free time.
+func _process(_delta: float) -> void:
+	if _class_travel_issued or not TimeManager.is_running():
+		return
+	if not _is_free_time_state(TimeManager.get_state()):
+		return
+	var remaining: float = TimeManager.get_phase_duration() - TimeManager.get_phase_elapsed()
+	if remaining > class_travel_lead_sec:
+		return
+	var next_period: int = _next_period_after_free_time()
+	if next_period > 0:
+		_issue_class_travel(next_period)
+
+
+## FREETIME1 → PERIOD2, FREETIME2 → PERIOD3, FREETIME3 → PERIOD4.
+func _next_period_after_free_time() -> int:
+	match TimeManager.get_state_name():
+		"FREETIME1":
+			return 2
+		"FREETIME2":
+			return 3
+		"FREETIME3":
+			return 4
+		_:
+			return 0
+
+
+## Point every NPC's navigation agent at its scheduled marker for `period`.
+func _issue_class_travel(period: int) -> void:
+	_class_travel_issued = true
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc == null or npc.instance == null:
+			continue
+		var marker_name: String = npc.instance.marker_for_period(period)
+		var target: Vector2 = _marker_position(marker_name, npc)
+		npc.set_forced_destination("class:%s" % marker_name, target)
+
+
+## Resolve a marker name to a world-space position, with the authored spawn
+## point as a recoverable fallback (e.g. a modded map missing the marker).
+func _marker_position(marker_name: String, npc: Npc) -> Vector2:
+	if _map != null and _map.has_marker(marker_name):
+		return _map.get_marker(marker_name)
+	push_warning("Game: marker '%s' not found for %s; using spawn point" % [marker_name, npc.instance.instance_id])
+	return _map.spawn_point if _map != null else Vector2.ZERO
+
+
+func _on_skip_requested(_from_state: int, _to_state: int, _skipped_duration: float) -> void:
+	_skip_pending = true
 
 
 ## Stats provider for the grade stub. NPC ids resolve to their instance stats;
@@ -94,11 +167,31 @@ func _stats_for(id: String) -> Dictionary:
 	return {}
 
 
-## On entry to a class period, reposition every NPC to its scheduled marker.
-## Free-time AI movement is deliberately out of scope (ticket 013).
+## On entry to a free-time phase, enable goal-driven AI and reset the travel
+## guard. On class entry, let an already-issued class walk finish; hard-snap only
+## when the transition came from skip() or the lead window was missed.
 func _on_state_changed(new_state: int, _old_state: int) -> void:
+	if _is_free_time_state(new_state):
+		_class_travel_issued = false
+		_skip_pending = false
+		var seed_value: int = TimeManager.get_day_number()
+		for npc_variant in _npcs:
+			var active_npc: Npc = npc_variant as Npc
+			if active_npc != null:
+				active_npc.set_ai_enabled(true, _map, seed_value)
+		return
+
+	var was_skip: bool = _skip_pending
+	_skip_pending = false
+
 	var period: int = TimeManager.period_number_for(new_state)
 	if period <= 0:
+		# BREAK, DAYEND and IDLE must stop all movement (including class travel)
+		# while the clock is paused.
+		for npc_variant in _npcs:
+			var idle_npc: Npc = npc_variant as Npc
+			if idle_npc != null:
+				idle_npc.set_ai_enabled(false)
 		return
 
 	for npc_variant in _npcs:
@@ -106,9 +199,13 @@ func _on_state_changed(new_state: int, _old_state: int) -> void:
 		if npc == null or npc.instance == null:
 			continue
 		var marker_name: String = npc.instance.marker_for_period(period)
-		var target: Vector2 = _map.spawn_point if _map != null else Vector2.ZERO
-		if _map != null and _map.has_marker(marker_name):
-			target = _map.get_marker(marker_name)
-		else:
-			push_warning("Game: marker '%s' not found for %s; using spawn point" % [marker_name, npc.instance.instance_id])
-		npc.move_to(target)
+		var target: Vector2 = _marker_position(marker_name, npc)
+		var goal: String = "class:%s" % marker_name
+		if was_skip:
+			# Skipped time is not simulated (ticket 011): snap instead of walking.
+			npc.set_ai_enabled(false)
+			npc.move_to(target)
+		elif not npc.is_forced_to(goal):
+			# The lead window was missed (e.g. a test advanced the clock in one
+			# jump) — start the walk now so NPCs still travel rather than pop.
+			npc.set_forced_destination(goal, target)
