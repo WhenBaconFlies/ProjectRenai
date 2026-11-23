@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CharacterTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterTemplate.gd" id="1_char_jordan"]
+[ext_resource type="Resource" path="res://resources/traits/trait_athletic.tres" id="2_jordan_skill"]
+[ext_resource type="Resource" path="res://resources/traits/trait_likes_sports.tres" id="3_jordan_interest"]
+
+[resource]
+script = ExtResource("1_char_jordan")
+id = "char:jordan"
+display_name = "Jordan"
+gender = "male"
+orientation = "bi"
+hair = "short_black"
+eyes = "brown"
+mouth = "grin"
+skin_tone = "tan"
+outfit = "school_uniform"
+traits = [ExtResource("2_jordan_skill"), ExtResource("3_jordan_interest")]
+strength = 7
+dexterity = 6
+constitution = 7
+intelligence = 4
+wisdom = 4
+charisma = 5
+strength_growth = 1.0
+dexterity_growth = 1.0
+constitution_growth = 1.0
+intelligence_growth = 1.0
+wisdom_growth = 1.0
+charisma_growth = 1.0
+trait_point_cost = 0

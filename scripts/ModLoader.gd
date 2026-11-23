@@ -10,6 +10,10 @@
 ## The registries live here (no separate autoload): later tickets (NPC spawning,
 ## dialogue filtering, save linkage) look resources up by stable ID through
 ## get_resource()/get_all(). v1 is add-only — duplicate IDs are never overridden.
+##
+## Authored base characters under res://resources/characters/ are registered into
+## the `character` bucket first (ticket 012), so NPC spawning has a single
+## resolution path for both base and modded templates.
 extends Node
 
 ## --- Registry bucket names -------------------------------------------------
@@ -23,6 +27,12 @@ const TYPE_DIALOGUE: String = "dialogue"
 const DEFAULT_MODS_ROOT: String = "res://mods/"
 const MANIFEST_FILE: String = "mod.json"
 const DISABLED_MARKER: String = ".disabled"
+
+## Authored (non-mod) character templates loaded directly from res://. They are
+## registered before mod content so v1's add-only rule lets mods add new ids but
+## never silently override a base id.
+const BASE_CHARACTERS_DIR: String = "res://resources/characters/"
+const BASE_OWNER: String = "base"
 
 ## bucket name -> { stable id (String) -> Resource }
 var _registries: Dictionary = {}
@@ -130,6 +140,7 @@ func load_mods(root_path: String = DEFAULT_MODS_ROOT) -> void:
 		return
 	_is_loading = true
 	_reset_registries()
+	_register_base_content()
 	_mods_root = root_path
 
 	var mods: Dictionary = _discover_mods(root_path)
@@ -154,6 +165,30 @@ func _reset_registries() -> void:
 	_owners.clear()
 	_loaded_mods.clear()
 	_last_report.clear()
+
+
+## Register authored base character templates into the `character` registry.
+## Runs on every load_mods() (after the clear) so re-scans restore base content.
+## A missing directory is a soft warning, never a crash — gameplay can still run
+## from mod content alone.
+func _register_base_content() -> void:
+	var dir: DirAccess = DirAccess.open(BASE_CHARACTERS_DIR)
+	if dir == null:
+		_log("WARN: cannot open base characters directory '%s' (error %d)" % [BASE_CHARACTERS_DIR, DirAccess.get_open_error()])
+		return
+
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if entry.ends_with(".tres") or entry.ends_with(".res"):
+			var path: String = _join(BASE_CHARACTERS_DIR, entry)
+			var resource: Resource = ResourceLoader.load(path)
+			if resource is CharacterTemplate:
+				register_resource(TYPE_CHARACTER, resource, BASE_OWNER)
+			else:
+				_log("WARN: base content '%s' is not a CharacterTemplate; skipping" % path)
+		entry = dir.get_next()
+	dir.list_dir_end()
 
 
 ## Scan `root_path` for direct subfolders that are mod candidates.

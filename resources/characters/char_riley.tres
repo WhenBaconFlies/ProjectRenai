@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CharacterTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterTemplate.gd" id="1_char_riley"]
+[ext_resource type="Resource" path="res://resources/traits/trait_studious.tres" id="2_riley_skill"]
+[ext_resource type="Resource" path="res://resources/traits/trait_dislikes_noise.tres" id="3_riley_dislike"]
+
+[resource]
+script = ExtResource("1_char_riley")
+id = "char:riley"
+display_name = "Riley"
+gender = "female"
+orientation = "homo"
+hair = "long_black"
+eyes = "hazel"
+mouth = "neutral"
+skin_tone = "light"
+outfit = "school_uniform"
+traits = [ExtResource("2_riley_skill"), ExtResource("3_riley_dislike")]
+strength = 3
+dexterity = 4
+constitution = 4
+intelligence = 8
+wisdom = 7
+charisma = 4
+strength_growth = 1.0
+dexterity_growth = 1.0
+constitution_growth = 1.0
+intelligence_growth = 1.1
+wisdom_growth = 1.0
+charisma_growth = 1.0
+trait_point_cost = 0

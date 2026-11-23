@@ -51,6 +51,15 @@ extends Resource
 @export var spawn_point: Vector2 = Vector2.ZERO
 
 
+## --- Named markers ----------------------------------------------------------
+
+## Named world-space locations used by per-instance NPC schedules. Keys are
+## stable marker names (e.g. "classroom_a"); values are world-space Vector2s.
+## Schedules store the name, not the position, so a marker can be moved in the
+## map resource without rewriting any NPC schedule.
+@export var markers: Dictionary = {}
+
+
 ## --- Navigation mesh ---
 
 ## Baked navigation polygon used by NavigationAgent2D for pathfinding.
@@ -83,3 +92,34 @@ var chunk_grid_height: int:
 var chunk_grid_size: Vector2i:
 	get:
 		return Vector2i(chunk_grid_width, chunk_grid_height)
+
+
+## --- Marker read API --------------------------------------------------------
+
+## True when `name` is an authored marker on this map.
+func has_marker(marker_name: String) -> bool:
+	return markers.has(marker_name)
+
+
+## World-space position of marker `name`, or `fallback` when absent. Tolerates
+## Vector2, Vector2i and 2-element arrays so hand-authored resources are safe.
+func get_marker(marker_name: String, fallback: Vector2 = Vector2.ZERO) -> Vector2:
+	if not markers.has(marker_name):
+		return fallback
+	var value: Variant = markers[marker_name]
+	if value is Vector2:
+		return value
+	if value is Vector2i:
+		return Vector2(value)
+	if value is Array and (value as Array).size() >= 2:
+		return Vector2(float(value[0]), float(value[1]))
+	return fallback
+
+
+## All authored marker names, sorted for deterministic schedule generation.
+func get_marker_names() -> Array:
+	var names: Array = []
+	for key in markers.keys():
+		names.append(str(key))
+	names.sort()
+	return names
