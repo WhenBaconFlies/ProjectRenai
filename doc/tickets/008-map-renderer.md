@@ -4,10 +4,10 @@
 
 **Blocked by:** 005 (Item + Map schemas), 007 (Minimal base content)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A `Map` `.tres` renders as a tilemap with placed objects visible
-- [ ] Placed objects are instantiated from their `Item` `PackedScene` reference
-- [ ] A navigation mesh is baked and available for `NavigationAgent2D`
-- [ ] Spawn point is exposed for use by the spawner
-- [ ] Renderer handles a map with no placed objects without errors
+- [x] A `Map` `.tres` renders as a tilemap with placed objects visible
+- [x] Placed objects are instantiated from their `Item` `PackedScene` reference
+- [x] A navigation mesh is baked and available for `NavigationAgent2D`
+- [x] Spawn point is exposed for use by the spawner
+- [x] Renderer handles a map with no placed objects without errors
