@@ -4,9 +4,9 @@
 
 **Blocked by:** 001 (Project scaffolding)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `CharacterTemplate` resource class exists with all specified fields
-- [ ] `Trait` resource class exists with all specified fields
-- [ ] A `.tres` of each type can be created and saved in the editor without errors
-- [ ] Fields are typed and documented with comments
+- [x] `CharacterTemplate` resource class exists with all specified fields
+- [x] `Trait` resource class exists with all specified fields
+- [x] A `.tres` of each type can be created and saved in the editor without errors
+- [x] Fields are typed and documented with comments
