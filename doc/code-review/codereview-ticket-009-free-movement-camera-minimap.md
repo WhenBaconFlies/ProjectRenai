@@ -5,6 +5,8 @@
 - **Changed files:** 8 (scripts/Player.gd, scripts/FollowCamera.gd, scripts/Minimap.gd, scenes/Game.tscn, project.godot, resources/maps/map_school.tres, doc/tickets/009-free-movement-camera-minimap.md, doc/idea-v1-decisions.md)
 - **Findings:** 6 (Critical: 0, High: 0, Medium: 2, Low: 4)
 
+> **Post-review update (user-visual testing):** the camera-limit implementation was corrected after the user reported inverted camera motion. Findings #2/#4 were implemented by insetting limits by half the zoomed viewport; at a real 1152×648 viewport that collapsed the limit range and made the camera drift opposite to the player. Limits are now the map's raw pixel bounds (Godot already factors in viewport/zoom), the camera is parented to the player, and a regression check at 1152×648 verifies correct direction and edge clamping. See `doc/idea-v1-decisions.md`.
+
 ## Findings
 
 ### 1. [Medium][Bug] Input-action fallback returns on the first existing action, leaving missing actions unbound
