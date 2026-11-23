@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CharacterTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterTemplate.gd" id="1_gyr2x"]
+[ext_resource type="Resource" path="res://resources/traits/trait_outgoing.tres" id="2_bw7vh"]
+[ext_resource type="Resource" path="res://resources/traits/trait_likes_sports.tres" id="3_uw85u"]
+
+[resource]
+script = ExtResource("1_gyr2x")
+id = "char:sam"
+display_name = "Sam"
+gender = "female"
+orientation = "hetero"
+hair = "long_blonde"
+eyes = "green"
+mouth = "neutral"
+skin_tone = "medium"
+outfit = "school_uniform"
+traits = [ExtResource("2_bw7vh"), ExtResource("3_uw85u")]
+strength = 5
+dexterity = 6
+constitution = 5
+intelligence = 5
+wisdom = 5
+charisma = 7
+strength_growth = 1.0
+dexterity_growth = 1.0
+constitution_growth = 1.0
+intelligence_growth = 1.0
+wisdom_growth = 1.0
+charisma_growth = 1.0
+trait_point_cost = 0

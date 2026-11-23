@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CharacterTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterTemplate.gd" id="1_uhirs"]
+[ext_resource type="Resource" path="res://resources/traits/trait_studious.tres" id="2_0kffs"]
+[ext_resource type="Resource" path="res://resources/traits/trait_shy.tres" id="3_vlo46"]
+
+[resource]
+script = ExtResource("1_uhirs")
+id = "char:alex"
+display_name = "Alex"
+gender = "male"
+orientation = "hetero"
+hair = "short_brown"
+eyes = "blue"
+mouth = "smile"
+skin_tone = "light"
+outfit = "school_uniform"
+traits = [ExtResource("2_0kffs"), ExtResource("3_vlo46")]
+strength = 4
+dexterity = 5
+constitution = 5
+intelligence = 7
+wisdom = 6
+charisma = 4
+strength_growth = 1.0
+dexterity_growth = 1.0
+constitution_growth = 1.0
+intelligence_growth = 1.0
+wisdom_growth = 1.0
+charisma_growth = 1.0
+trait_point_cost = 0

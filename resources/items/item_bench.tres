@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="Item" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/Item.gd" id="1_8uqgt"]
+
+[sub_resource type="PackedScene" id="PackedScene_jpn18"]
+_bundled = {
+"conn_count": 0,
+"conns": PackedInt32Array(),
+"editable_instances": [],
+"names": PackedStringArray("Bench", "Node2D"),
+"node_count": 1,
+"node_paths": [],
+"nodes": PackedInt32Array(-1, -1, 1, 0, -1, 0, 0),
+"variants": [],
+"version": 3
+}
+
+[resource]
+script = ExtResource("1_8uqgt")
+id = "item:bench"
+type = "furniture"
+packed_scene = SubResource("PackedScene_jpn18")
+sprite_offset = Vector2(0, 0)
+sprite_scale = Vector2(1, 1)
+collider_offset = Vector2(0, 0)
+blocks_movement = true
+blocks_sight = false
+interactable = true
+properties = {}
