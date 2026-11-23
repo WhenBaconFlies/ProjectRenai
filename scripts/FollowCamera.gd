@@ -3,14 +3,19 @@ extends Camera2D
 
 ## FollowCamera
 ##
-## Smooth-follow camera for the v1 slice. The camera is a CHILD of the player,
-## so it inherits the player's transform automatically; Camera2D's built-in
-## position smoothing adds the lag that makes motion feel fluid.
+## Smooth-follow camera for the v1 slice. The camera is a CHILD of the player;
+## its local offset is the lag between the smoothed world position and the
+## player's current world position.
 ##
-## Important: do not write `global_position` from a script every frame while
-## smoothing is enabled. That fights Camera2D's internal smoothing state and
-## makes the view drift the wrong way (observed as an inverted follow). Moving
-## the parent is the intended way to drive a smoothed Camera2D.
+## Smoothing is done manually in _physics_process (Camera2D's built-in
+## position smoothing is deliberately OFF). The player also moves in physics
+## ticks, so both update in lockstep: the player stays fixed on screen between
+## ticks instead of stepping and then drifting back as the camera interpolates
+## every render frame (measured as a ~14 px sawtooth at 8x zoom).
+##
+## Do not write `global_position` from a script every frame while Camera2D's
+## built-in smoothing is enabled — that fights its internal state and was
+## observed to invert the follow direction.
 ##
 ## The map is tiny (160x128 px on the default resource), so the camera is
 ## zoomed in by default to make follow visible and to make the minimap useful.
@@ -26,7 +31,7 @@ extends Camera2D
 ## viewport so the camera actually travels as the player moves.
 @export var zoom_level: float = 8.0
 
-## Camera2D position smoothing speed (higher = tighter follow, less lag).
+## Exponential smoothing rate (higher = tighter follow, less lag).
 @export var smoothing_speed: float = 10.0
 
 ## Whether to keep the view inside the rendered map's pixel bounds.
@@ -36,22 +41,27 @@ extends Camera2D
 var _renderer: MapRenderer
 var _map_pixel_size: Vector2i = Vector2i.ZERO
 var _last_map: Map = null
+var _player_parent: Node2D
+var _smooth_world: Vector2 = Vector2.ZERO
+var _follow_initialized: bool = false
 
 
 func _ready() -> void:
 	# Local zero: the parent (player) supplies the world position.
 	position = Vector2.ZERO
 	zoom = Vector2(zoom_level, zoom_level)
-	position_smoothing_enabled = true
-	position_smoothing_speed = smoothing_speed
-	# Apply limits after smoothing so the view never drifts past the map edge.
-	limit_smoothed = true
+	# Manual smoothing happens in _physics_process, in lockstep with the player.
+	position_smoothing_enabled = false
+	limit_smoothed = false
 	# Defer so the renderer (an ancestor's sibling) has completed _ready().
 	call_deferred("_resolve_nodes")
 
 
 ## Resolve the renderer and derive camera limits from the rendered map.
 func _resolve_nodes() -> void:
+	_player_parent = get_parent() as Node2D
+	if _player_parent == null:
+		push_warning("FollowCamera: parent is not a Node2D; camera cannot follow")
 	_renderer = get_node_or_null(map_renderer_path) as MapRenderer
 	_refresh_map_bounds()
 	# Re-derive limits if the window is resized (view size affects margins).
@@ -94,7 +104,21 @@ func _on_viewport_resized() -> void:
 	_apply_limits()
 
 
-## Only map swaps need attention here; following is handled by the parent.
-func _process(_delta: float) -> void:
+## Smooth toward the player's world position. Running in the physics tick
+## keeps the camera and player in lockstep, avoiding per-frame jitter.
+func _physics_process(delta: float) -> void:
 	if _renderer != null and _renderer.map != _last_map:
 		_refresh_map_bounds()
+	if _player_parent == null:
+		return
+
+	var target: Vector2 = _player_parent.global_position
+	if not _follow_initialized:
+		_smooth_world = target
+		_follow_initialized = true
+	else:
+		var weight: float = 1.0 - exp(-smoothing_speed * delta)
+		_smooth_world = _smooth_world.lerp(target, weight)
+
+	# Camera is parented to the player: local offset = desired - parent.
+	position = _smooth_world - target
