@@ -4,9 +4,9 @@
 
 **Blocked by:** 002 (Autoload skeleton)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `DebugStart.tscn` exists and is runnable
-- [ ] Running it loads `Game.tscn` without errors
-- [ ] Autoloads handle a fresh start (no save present) without crashing
-- [ ] No menu flow is required to reach gameplay
+- [x] `DebugStart.tscn` exists and is runnable
+- [x] Running it loads `Game.tscn` without errors
+- [x] Autoloads handle a fresh start (no save present) without crashing
+- [x] No menu flow is required to reach gameplay

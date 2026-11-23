@@ -109,6 +109,13 @@ Records the clarification decisions made during the brainstorming session.
 - **Config:** tier radii and tick rates as settings (Options UI wiring deferred; config-level support in ChunkManager).
 - **Map editor:** chunks auto-derived from map dimensions + chunk size; editor shows chunk grid overlay.
 
+### Ticket 003 — DebugStart launcher (implementation decisions)
+- **Game.tscn handling:** A minimal placeholder `scenes/Game.tscn` (Node2D root) is created now so DebugStart can load it without errors; later tickets (map renderer, movement, etc.) populate it.
+- **Fresh-start path:** GameManager owns the fresh-start (no save) path. `start_fresh_day()` sets `current_save = null` and defers `change_scene("res://scenes/Game.tscn")`. The scene change is deferred (`call_deferred`) so it is safe to invoke from `_ready()` without triggering "parent node is busy" errors.
+- **Entry point:** `run/main_scene` in `project.godot` points to `res://scenes/DebugStart.tscn`, so the project launches straight into the debug launcher with no menu flow.
+- **DebugStart scene:** `scenes/DebugStart.tscn` (Node root) with `scripts/DebugStart.gd`, which delegates to `GameManager.start_fresh_day()` rather than switching scenes itself.
+- **Autoloads:** remain stubs; none assume a save exists, so a fresh start does not crash. `GameManager.current_save == null` denotes "no save / fresh start".
+
 ### Deferred (non-goals for v1)
 - Main/New Game/Load/Create/Mods/Options menus (functional).
 - Character/map creation tools and map editor.
