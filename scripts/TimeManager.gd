@@ -533,9 +533,20 @@ func _ensure_roster() -> void:
 	if not _roster.is_empty():
 		return
 	_roster.append(_player_id)
+
+	# Base character templates are in the registry as of ticket 012, so the
+	# player's own template must not become a phantom NPC attendee here.
+	var player_template_ids: Dictionary = {}
+	if not player_template_id.is_empty():
+		player_template_ids[player_template_id] = true
+	if not player_template_path.is_empty() and ResourceLoader.exists(player_template_path):
+		var player_template := ResourceLoader.load(player_template_path) as CharacterTemplate
+		if player_template != null and not player_template.id.is_empty():
+			player_template_ids[player_template.id] = true
+
 	for resource in ModLoader.get_all(ModLoader.TYPE_CHARACTER):
 		var id: String = str(resource.get("id"))
-		if id.is_empty() or id == _player_id or _roster.has(id):
+		if id.is_empty() or id == _player_id or player_template_ids.has(id) or _roster.has(id):
 			continue
 		_roster.append(id)
 

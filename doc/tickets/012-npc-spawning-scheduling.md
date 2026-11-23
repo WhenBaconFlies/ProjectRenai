@@ -4,12 +4,12 @@
 
 **Blocked by:** 011 (Day state machine), 007 (Minimal base content)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] 3–5 NPCs spawn from template IDs at map spawn
-- [ ] Each NPC has a per-instance schedule (period → named map marker)
-- [ ] On period change, NPCs move to their scheduled class location
-- [ ] Attendance is recorded for each NPC per period
-- [ ] NPC instance references its template by stable template ID
-- [ ] `NpcInstance` has a runtime-only `tier` field (default close) for post-v1 chunk loading
-- [ ] A missing template on load is a recoverable error (no crash)
+- [x] 3–5 NPCs spawn from template IDs at map spawn
+- [x] Each NPC has a per-instance schedule (period → named map marker)
+- [x] On period change, NPCs move to their scheduled class location
+- [x] Attendance is recorded for each NPC per period
+- [x] NPC instance references its template by stable template ID
+- [x] `NpcInstance` has a runtime-only `tier` field (default close) for post-v1 chunk loading
+- [x] A missing template on load is a recoverable error (no crash)

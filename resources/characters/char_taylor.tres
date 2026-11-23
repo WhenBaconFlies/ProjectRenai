@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CharacterTemplate" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/CharacterTemplate.gd" id="1_char_taylor"]
+[ext_resource type="Resource" path="res://resources/traits/trait_outgoing.tres" id="2_taylor_personality"]
+[ext_resource type="Resource" path="res://resources/traits/trait_studious.tres" id="3_taylor_skill"]
+
+[resource]
+script = ExtResource("1_char_taylor")
+id = "char:taylor"
+display_name = "Taylor"
+gender = "nonbinary"
+orientation = "bi"
+hair = "short_red"
+eyes = "grey"
+mouth = "smile"
+skin_tone = "medium"
+outfit = "school_uniform"
+traits = [ExtResource("2_taylor_personality"), ExtResource("3_taylor_skill")]
+strength = 4
+dexterity = 5
+constitution = 5
+intelligence = 6
+wisdom = 6
+charisma = 6
+strength_growth = 1.0
+dexterity_growth = 1.0
+constitution_growth = 1.0
+intelligence_growth = 1.0
+wisdom_growth = 1.0
+charisma_growth = 1.0
+trait_point_cost = 0
