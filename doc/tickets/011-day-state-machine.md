@@ -4,13 +4,13 @@
 
 **Blocked by:** 008 (Map renderer), 002 (Autoload skeleton)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] State machine transitions through all periods in order
-- [ ] `TimeManager` drives period advancement on a real-time clock
-- [ ] Skip advances to the next period boundary (time jumps, no simulation in skipped class time)
-- [ ] Attendance is recorded per period
-- [ ] Grade stub computes a small stat bonus from attendance + INT/WIS
-- [ ] NPC attendance is simulated (perfect) in v1
-- [ ] DayEnd triggers an autosave + manual save prompt
-- [ ] Break days are represented as a separate state (not exercised in v1)
+- [x] State machine transitions through all periods in order
+- [x] `TimeManager` drives period advancement on a real-time clock
+- [x] Skip advances to the next period boundary (time jumps, no simulation in skipped class time)
+- [x] Attendance is recorded per period
+- [x] Grade stub computes a small stat bonus from attendance + INT/WIS
+- [x] NPC attendance is simulated (perfect) in v1
+- [x] DayEnd triggers an autosave + manual save prompt
+- [x] Break days are represented as a separate state (not exercised in v1)

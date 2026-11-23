@@ -23,6 +23,9 @@ func _ready() -> void:
 ## Called by the DebugStart launcher so the slice is runnable immediately.
 func start_fresh_day() -> void:
 	current_save = null
+	# The Game scene starts the clock in its own _ready(), after all of its
+	# children (and their listeners) exist. change_scene_to_file() defers the
+	# swap past this call, so starting here would emit day_started too early.
 	change_scene("res://scenes/Game.tscn")
 
 
