@@ -95,9 +95,9 @@ res://
 
 ### 5.3 Resource schemas (data model)
 - **CharacterTemplate** (`.tres`): identity (id, name, gender, orientation), appearance parts (hair, eyes, mouth, skin tone, outfit), traits (skills/interests/dislikes/personality), starting stats, stat growth modifiers, trait point cost. Authored/shared; immutable at runtime.
-- **NpcInstance** (runtime, saved): template ID, current stats (base + deltas), mood (0–100), **per-instance directed meters** (`meters: { other_id → {familiarity, affection} }`), **per-instance schedule** (`schedule: period → named map marker`), position, current goal. References template by stable ID.
+- **NpcInstance** (runtime, saved): template ID, current stats (base + deltas), mood (0–100), **per-instance directed meters** (`meters: { other_id → {familiarity, affection} }`), **per-instance schedule** (`schedule: period → named map marker`), position, current goal, **runtime-only `tier` field (default close, reserved for post-v1 chunk loading)**. References template by stable ID.
 - **PlayerInstance**: same shape as NpcInstance but with free-choice interaction; available choices gated by stats + relationship.
-- **Map** (`.tres`): tile data (grid of tile IDs), placed objects (list of {position, resource ref}), spawn point, navigation mesh data.
+- **Map** (`.tres`): tile data (grid of tile IDs), placed objects (list of {position, resource ref}), spawn point, navigation mesh data, **`chunk_size` field (tiles, default 32) with derived chunk grid dimensions (reserved for post-v1 chunk loading)**.
 - **DialogueTopic** (`.tres`): id, text, conditions (mood/interest/trait/familiarity thresholds, required stat), checked stat, difficulty, success/failure affection deltas, familiarity delta, mood delta.
 - **Trait** (`.tres`): id, category (skill/interest/dislike/personality), point cost, stat modifiers (starting + growth), tags.
 - **Item** (`.tres`): id, type, `PackedScene` reference (for instantiation), sprite/collider data, properties (for furniture/walls used by map editor).
