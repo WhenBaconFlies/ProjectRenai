@@ -32,8 +32,12 @@ const GROUP_NAME := "player"
 ## Colour of the small facing indicator drawn on the body.
 @export var facing_color: Color = Color(0.18, 0.12, 0.06)
 
-## Radius of the physics collider and drawn body (pixels).
+## Radius of the physics collider and drawn body (pixels). At runtime this
+## becomes the authoritative value applied to the child CollisionShape2D.
 @export var body_radius: float = 6.0
+
+## NodePath (relative to this player) of the MapRenderer supplying the spawn.
+@export var map_renderer_path: NodePath = ^"../MapRenderer"
 
 
 ## Last non-zero movement direction; used to draw the facing dot.
@@ -43,14 +47,26 @@ var _facing: Vector2 = Vector2.RIGHT
 func _ready() -> void:
 	add_to_group(GROUP_NAME)
 	_ensure_input_actions()
+	_apply_body_radius()
 	# Deferred so the sibling MapRenderer has run its _ready()/render() first.
 	call_deferred("_snap_to_spawn")
+
+
+## Make the exported radius authoritative for both visuals and physics.
+func _apply_body_radius() -> void:
+	var shape_node := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape_node == null or not shape_node.shape is CircleShape2D:
+		return
+	# Duplicate so a scene sub-resource is not mutated across instances.
+	var circle: CircleShape2D = (shape_node.shape as CircleShape2D).duplicate()
+	circle.radius = body_radius
+	shape_node.shape = circle
 
 
 ## Snap to the map's authored spawn point. Falls back to the scene position if
 ## no renderer/map is present (e.g. an empty test scene).
 func _snap_to_spawn() -> void:
-	var renderer := get_node_or_null("../MapRenderer") as MapRenderer
+	var renderer := get_node_or_null(map_renderer_path) as MapRenderer
 	if renderer == null or renderer.map == null:
 		push_warning("Player: no rendered map found; keeping scene position")
 		return
@@ -88,29 +104,41 @@ func _draw() -> void:
 ## so the controller still works if project.godot's [input] section is edited
 ## incorrectly. Normal runs find the actions already defined there.
 func _ensure_input_actions() -> void:
-	# Only build the fallback actions when none exist; project.godot normally
-	# defines them already, and we must not duplicate its events.
+	# Add every missing action first, then bind events only to the ones we
+	# created. Returning on the first existing action would leave partially
+	# configured input maps with actions that have no events at all.
+	var missing: Array[String] = []
 	for action in ["move_left", "move_right", "move_up", "move_down"]:
-		if InputMap.has_action(action):
-			return
-		InputMap.add_action(action, 0.5)
+		if not InputMap.has_action(action):
+			InputMap.add_action(action, 0.5)
+			missing.append(action)
+	for action in missing:
+		_register_default_events(action)
 
-	_register_key("move_left", KEY_A)
-	_register_key("move_left", KEY_LEFT)
-	_register_key("move_right", KEY_D)
-	_register_key("move_right", KEY_RIGHT)
-	_register_key("move_up", KEY_W)
-	_register_key("move_up", KEY_UP)
-	_register_key("move_down", KEY_S)
-	_register_key("move_down", KEY_DOWN)
-	_register_axis("move_left", JOY_AXIS_LEFT_X, -1.0)
-	_register_axis("move_right", JOY_AXIS_LEFT_X, 1.0)
-	_register_axis("move_up", JOY_AXIS_LEFT_Y, -1.0)
-	_register_axis("move_down", JOY_AXIS_LEFT_Y, 1.0)
-	_register_button("move_left", JOY_BUTTON_DPAD_LEFT)
-	_register_button("move_right", JOY_BUTTON_DPAD_RIGHT)
-	_register_button("move_up", JOY_BUTTON_DPAD_UP)
-	_register_button("move_down", JOY_BUTTON_DPAD_DOWN)
+
+## Bind keyboard, gamepad stick and d-pad events for one fallback action.
+func _register_default_events(action: String) -> void:
+	match action:
+		"move_left":
+			_register_key(action, KEY_A)
+			_register_key(action, KEY_LEFT)
+			_register_axis(action, JOY_AXIS_LEFT_X, -1.0)
+			_register_button(action, JOY_BUTTON_DPAD_LEFT)
+		"move_right":
+			_register_key(action, KEY_D)
+			_register_key(action, KEY_RIGHT)
+			_register_axis(action, JOY_AXIS_LEFT_X, 1.0)
+			_register_button(action, JOY_BUTTON_DPAD_RIGHT)
+		"move_up":
+			_register_key(action, KEY_W)
+			_register_key(action, KEY_UP)
+			_register_axis(action, JOY_AXIS_LEFT_Y, -1.0)
+			_register_button(action, JOY_BUTTON_DPAD_UP)
+		"move_down":
+			_register_key(action, KEY_S)
+			_register_key(action, KEY_DOWN)
+			_register_axis(action, JOY_AXIS_LEFT_Y, 1.0)
+			_register_button(action, JOY_BUTTON_DPAD_DOWN)
 
 
 func _register_key(action: String, keycode: int) -> void:

@@ -32,6 +32,7 @@ extends Camera2D
 var _player: Node2D
 var _renderer: MapRenderer
 var _map_pixel_size: Vector2i = Vector2i.ZERO
+var _last_map: Map = null
 
 
 func _ready() -> void:
@@ -51,19 +52,28 @@ func _resolve_nodes() -> void:
 		push_warning("FollowCamera: player node not found; camera will not follow")
 
 	_renderer = get_node_or_null(map_renderer_path) as MapRenderer
-	if _renderer == null or _renderer.map == null:
-		push_warning("FollowCamera: map renderer/map not found; no camera limits")
-		return
-
-	_map_pixel_size = Vector2i(
-		_renderer.map.width * _renderer.map.tile_size,
-		_renderer.map.height * _renderer.map.tile_size
-	)
-	_apply_limits()
+	_refresh_map_bounds()
 	# Re-derive limits if the window is resized (view size affects margins).
 	var viewport := get_viewport()
 	if viewport != null and not viewport.size_changed.is_connected(_on_viewport_resized):
 		viewport.size_changed.connect(_on_viewport_resized)
+
+
+## Re-read the renderer's current map and recalculate bounds. Called on load,
+## on map swaps (MapRenderer.render is re-entrant), and never on resize — the
+## cached extents are reused there via _on_viewport_resized().
+func _refresh_map_bounds() -> void:
+	if _renderer == null or _renderer.map == null:
+		_map_pixel_size = Vector2i.ZERO
+		_last_map = null
+		push_warning("FollowCamera: map renderer/map not found; no camera limits")
+		return
+	_last_map = _renderer.map
+	_map_pixel_size = Vector2i(
+		_last_map.width * _last_map.tile_size,
+		_last_map.height * _last_map.tile_size
+	)
+	_apply_limits()
 
 
 ## Clamp the camera so the visible rectangle stays inside the map. Godot's raw
@@ -85,7 +95,8 @@ func _apply_limits() -> void:
 ## to the map's centre; otherwise keep the view inside the map bounds.
 func _axis_limit(map_extent: int, half_view: float) -> int:
 	if float(map_extent) <= half_view * 2.0:
-		return int(round(float(map_extent) * 0.5))
+		# floor() keeps limit_left <= limit_right even for odd extents.
+		return int(floor(float(map_extent) * 0.5))
 	return int(round(half_view))
 
 
@@ -95,5 +106,7 @@ func _on_viewport_resized() -> void:
 
 ## Track the player. Camera2D smoothing interpolates toward this target.
 func _process(_delta: float) -> void:
+	if _renderer != null and _renderer.map != _last_map:
+		_refresh_map_bounds()
 	if _player != null:
 		global_position = _player.global_position

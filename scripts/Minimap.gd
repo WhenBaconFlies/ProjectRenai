@@ -122,9 +122,10 @@ func _draw() -> void:
 		if item == null or not item.blocks_movement:
 			continue
 		var pos := _to_vector2(dict.get("position", Vector2.ZERO))
+		var collider := _collider_rect(item, map.tile_size)
 		var rect := Rect2(
-			origin + (pos - Vector2(map.tile_size * 0.5, map.tile_size * 0.5)) * scale,
-			Vector2(map.tile_size * scale, map.tile_size * scale)
+			origin + (pos + collider.position) * scale,
+			collider.size * scale
 		)
 		var color: Color = wall_color if item.type == "wall" else furniture_color
 		draw_rect(rect, color, true)
@@ -132,6 +133,22 @@ func _draw() -> void:
 	# Player marker on top of everything else.
 	if _player != null:
 		draw_circle(origin + _player.global_position * scale, 3.0, player_color)
+
+
+## Local-space rectangle of an item's authored collider, matching MapRenderer's
+## physics shape (offset applied, tile-size rectangle when no shape is authored).
+func _collider_rect(item: Item, tile_size: int) -> Rect2:
+	var size := Vector2(tile_size, tile_size)
+	var shape: Shape2D = item.collider_shape
+	if shape is RectangleShape2D:
+		size = (shape as RectangleShape2D).size
+	elif shape is CircleShape2D:
+		var radius: float = (shape as CircleShape2D).radius
+		size = Vector2(radius * 2.0, radius * 2.0)
+	elif shape is CapsuleShape2D:
+		var capsule: CapsuleShape2D = shape as CapsuleShape2D
+		size = Vector2(capsule.radius * 2.0, capsule.height)
+	return Rect2(item.collider_offset - size * 0.5, size)
 
 
 ## Convert the placed-object position variants (Vector2/Vector2i/Array) to Vector2.

@@ -17,8 +17,9 @@ map = ExtResource("2_map")
 
 [node name="Player" type="CharacterBody2D" parent="."]
 groups = ["player"]
-position = Vector2(24, 24)
+position = Vector2(56, 24)
 script = ExtResource("3_player")
+map_renderer_path = NodePath("../MapRenderer")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
 shape = SubResource("CircleShape2D_player")
