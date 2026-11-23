@@ -116,6 +116,15 @@ Records the clarification decisions made during the brainstorming session.
 - **DebugStart scene:** `scenes/DebugStart.tscn` (Node root) with `scripts/DebugStart.gd`, which delegates to `GameManager.start_fresh_day()` rather than switching scenes itself.
 - **Autoloads:** remain stubs; none assume a save exists, so a fresh start does not crash. `GameManager.current_save == null` denotes "no save / fresh start".
 
+### Ticket 005 — Item + Map schemas (implementation decisions)
+- **Item fields:** `id`, `type`, `packed_scene: PackedScene`, sprite data (`sprite`, `sprite_offset`, `sprite_scale`), collider data (`collider_shape`, `collider_offset`), and furniture/wall properties (`blocks_movement`, `blocks_sight`, `interactable`, plus free-form `properties: Dictionary`).
+- **Map tile data:** `width`, `height`, `tile_size`, optional `tile_set`, and a flat row-major `tile_ids: PackedInt32Array` (-1 = empty).
+- **Placed objects:** `placed_objects: Array` of dictionaries `{ "position": Vector2, "item": Item }`, instantiated by the renderer from each item's `packed_scene`.
+- **Spawn point:** `spawn_point: Vector2` (world space).
+- **Navigation mesh:** `navigation_mesh: NavigationPolygon`.
+- **Chunk seams:** `chunk_size: int = 32`; derived read-only `chunk_grid_width`, `chunk_grid_height`, `chunk_grid_size` (ceil division, 0 when size <= 0 or dimension <= 0).
+- **Map identity:** `id`, `display_name` for registry/mod linkage.
+
 ### Deferred (non-goals for v1)
 - Main/New Game/Load/Create/Mods/Options menus (functional).
 - Character/map creation tools and map editor.
