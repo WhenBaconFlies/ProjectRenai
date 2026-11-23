@@ -125,6 +125,6 @@ placed_objects = [{
 "item": ExtResource("2_yw3xa"),
 "position": Vector2(112, 80)
 }]
-spawn_point = Vector2(24, 24)
+spawn_point = Vector2(56, 24)
 navigation_mesh = SubResource("NavigationPolygon_stmyk")
 chunk_size = 32

@@ -4,10 +4,10 @@
 
 **Blocked by:** 008 (Map renderer)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Player moves freely in 2D with analog input
-- [ ] Collision prevents walking through walls and furniture
-- [ ] Camera follows the player with smoothing
-- [ ] Minimap displays and updates with player movement
-- [ ] No jitter or stutter during movement at 60 fps with the default map
+- [x] Player moves freely in 2D with analog input
+- [x] Collision prevents walking through walls and furniture
+- [x] Camera follows the player with smoothing
+- [x] Minimap displays and updates with player movement
+- [x] No jitter or stutter during movement at 60 fps with the default map
