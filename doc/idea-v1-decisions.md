@@ -116,6 +116,16 @@ Records the clarification decisions made during the brainstorming session.
 - **DebugStart scene:** `scenes/DebugStart.tscn` (Node root) with `scripts/DebugStart.gd`, which delegates to `GameManager.start_fresh_day()` rather than switching scenes itself.
 - **Autoloads:** remain stubs; none assume a save exists, so a fresh start does not crash. `GameManager.current_save == null` denotes "no save / fresh start".
 
+### Ticket 006 — DialogueTopic schema (implementation decisions)
+- **File:** `res://scripts/DialogueTopic.gd`, `class_name DialogueTopic extends Resource`.
+- **Identity fields:** `id: String`, `text: String`.
+- **Condition fields (eligibility):** `min_mood: int` (0 = no gate), `min_familiarity: int` (0 = no gate), `min_affection: int` (0 = no gate), `required_interests: PackedStringArray`, `required_traits: PackedStringArray`, `required_stat: String` (stat name; empty = none), `required_stat_min: int` (ignored when `required_stat` is empty). All conditions must pass for eligibility.
+- **Resolution fields:** `checked_stat: String` (stat used in `stat + (familiarity/10) + random(0..5) >= difficulty`; empty = no stat bonus), `difficulty: int`.
+- **Deltas:** separate success/failure variants for affection, familiarity, and mood — `affection_delta_success/failure`, `familiarity_delta_success/failure`, `mood_delta_success/failure` (all `int`). All deltas are applied to both parties' directed meters by the resolution ticket (015).
+- **Types:** free-form strings for stat/interest/trait ids (consistent with CharacterTemplate/Trait), matching the modding convention; meters are integers so deltas are ints.
+- **Margin scaling:** handled by the resolution step (ticket 015), not the schema.
+- **Verification:** `DialogueTopic.new()` instantiates and `ResourceSaver.save` + `ResourceLoader.load` round-trips all fields; registered in the global script class cache so it appears in the editor's "New Resource" dialog.
+
 ### Ticket 005 — Item + Map schemas (implementation decisions)
 - **Item fields:** `id`, `type`, `packed_scene: PackedScene`, sprite data (`sprite`, `sprite_offset`, `sprite_scale`), collider data (`collider_shape`, `collider_offset`), and furniture/wall properties (`blocks_movement`, `blocks_sight`, `interactable`, plus free-form `properties: Dictionary`).
 - **Map tile data:** `width`, `height`, `tile_size`, optional `tile_set`, and a flat row-major `tile_ids: PackedInt32Array` (-1 = empty).

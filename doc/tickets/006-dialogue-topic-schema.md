@@ -4,9 +4,9 @@
 
 **Blocked by:** 001 (Project scaffolding)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `DialogueTopic` resource class exists with all specified fields
-- [ ] A `.tres` can be created and saved in the editor without errors
-- [ ] Fields are typed and documented with comments
-- [ ] Conditions and deltas are clearly separated (success vs. failure variants)
+- [x] `DialogueTopic` resource class exists with all specified fields
+- [x] A `.tres` can be created and saved in the editor without errors
+- [x] Fields are typed and documented with comments
+- [x] Conditions and deltas are clearly separated (success vs. failure variants)
