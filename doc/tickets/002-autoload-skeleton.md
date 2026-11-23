@@ -4,9 +4,9 @@
 
 **Blocked by:** 001 (Project scaffolding)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] All six autoloads are registered in `project.godot`
-- [ ] Each autoload is a minimal script (GDScript or C#) that loads without errors
-- [ ] App runs and autoloads are accessible from a scene
-- [ ] No null-reference or missing-script errors on startup
+- [x] All six autoloads are registered in `project.godot`
+- [x] Each autoload is a minimal script (GDScript) that loads without errors
+- [x] App runs and autoloads are accessible from a scene
+- [x] No null-reference or missing-script errors on startup

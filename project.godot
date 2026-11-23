@@ -13,3 +13,12 @@ config_version=5
 config/name="ProjectRenai"
 config/features=PackedStringArray("4.2", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+GameManager="*res://scripts/GameManager.gd"
+SaveManager="*res://scripts/SaveManager.gd"
+TimeManager="*res://scripts/TimeManager.gd"
+ModLoader="*res://scripts/ModLoader.gd"
+AudioManager="*res://scripts/AudioManager.gd"
+LocalizationManager="*res://scripts/LocalizationManager.gd"

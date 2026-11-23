@@ -91,6 +91,12 @@ Records the clarification decisions made during the brainstorming session.
 
 ### Chunk loading (planned, post-v1 optimization)
 - **Plan D (hybrid) chosen.** Close tier: full sim + full render. Near tier: full NPC state, reduced tick rate, objects hidden, simplified collision. Far tier: identity preserved, tick rarely with large dt, coarse position, no render, coarse pathfinding.
+
+### Ticket 002 — Autoload skeleton (implementation decisions)
+- **Language:** GDScript for all six stubs (not C#). Keeps the change minimal and avoids C# toolchain/setup; later tickets may migrate individual autoloads to C# where data-heavy, updating the autoload path in `project.godot`.
+- **Location:** `res://scripts/<Name>.gd` (flat, no autoloads subfolder).
+- **Registration:** `[autoload]` section in `project.godot` with the `*` prefix (e.g. `GameManager="*res://scripts/GameManager.gd"`), verified to load and expose each as a global identifier accessible from a scene.
+- **No `class_name`:** Autoload scripts deliberately omit `class_name`. Declaring `class_name GameManager` (matching the autoload name) raises "Class 'GameManager' hides an autoload singleton" and breaks loading. If typed references are needed later, use a distinct class name.
 - **Chunk:** fixed tile grid, same size/shape across maps (map dimensions vary).
 - **Center of loading:** player position, with buffer for pop-in prevention.
 - **Tier distances:** chunk-radius based, configurable by player (optimization setting), with sensible defaults. Close radius 2, near radius 4, far beyond.
