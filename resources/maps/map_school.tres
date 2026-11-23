@@ -5,10 +5,10 @@
 [ext_resource type="Resource" path="res://resources/items/item_bench.tres" id="3_w07gu"]
 [ext_resource type="Script" path="res://scripts/Map.gd" id="4_dabj8"]
 
-[sub_resource type="NavigationPolygon" id="NavigationPolygon_lmeif"]
-vertices = PackedVector2Array(0, 0, 160, 0, 160, 128, 0, 128)
-polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3)])
-outlines = Array[PackedVector2Array]([PackedVector2Array(0, 0, 160, 0, 160, 128, 0, 128)])
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_stmyk"]
+vertices = PackedVector2Array(144, 16, 128, 80, 112, 80, 96, 64, 96, 48, 144, 112, 128, 96, 16, 112, 112, 96, 16, 16, 48, 32, 48, 48, 80, 48, 80, 64, 32, 48, 32, 32)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3, 4), PackedInt32Array(0, 5, 6, 1), PackedInt32Array(6, 5, 7, 8), PackedInt32Array(9, 0, 4, 10), PackedInt32Array(11, 10, 12, 13), PackedInt32Array(3, 2, 8, 7, 13), PackedInt32Array(11, 13, 7, 14), PackedInt32Array(14, 7, 9, 15), PackedInt32Array(10, 15, 9), PackedInt32Array(10, 4, 12)])
+outlines = Array[PackedVector2Array]([PackedVector2Array(16, 16, 144, 16, 144, 112, 16, 112), PackedVector2Array(32, 32, 48, 32, 48, 48, 32, 48), PackedVector2Array(112, 80, 128, 80, 128, 96, 112, 96), PackedVector2Array(80, 48, 96, 48, 96, 64, 80, 64)])
 source_geometry_group_name = &"navigation_polygon_source_group"
 
 [resource]
@@ -125,6 +125,6 @@ placed_objects = [{
 "item": ExtResource("2_yw3xa"),
 "position": Vector2(112, 80)
 }]
-spawn_point = Vector2(16, 16)
-navigation_mesh = SubResource("NavigationPolygon_lmeif")
+spawn_point = Vector2(24, 24)
+navigation_mesh = SubResource("NavigationPolygon_stmyk")
 chunk_size = 32

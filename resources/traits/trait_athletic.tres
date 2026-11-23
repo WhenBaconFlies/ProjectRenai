@@ -20,4 +20,4 @@ constitution_growth_mod = 0.0
 intelligence_growth_mod = 0.0
 wisdom_growth_mod = 0.0
 charisma_growth_mod = 0.0
-tags = PackedStringArray()
+tags = PackedStringArray("physical", "sports")
