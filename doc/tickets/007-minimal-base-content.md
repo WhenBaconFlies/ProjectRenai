@@ -4,11 +4,11 @@
 
 **Blocked by:** 004 (CharacterTemplate + Trait schemas), 005 (Item + Map schemas), 006 (DialogueTopic schema)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] At least one `Map` `.tres` exists with tiles, placed objects, and a spawn point
-- [ ] At least two `CharacterTemplate` `.tres` files exist with traits, stats, and appearance
-- [ ] At least one `Trait` `.tres` per category (skill, interest, dislike, personality)
-- [ ] At least two `DialogueTopic` `.tres` files with conditions and deltas
-- [ ] At least two `Item` `.tres` files
-- [ ] All resources load in the editor without errors
+- [x] At least one `Map` `.tres` exists with tiles, placed objects, and a spawn point
+- [x] At least two `CharacterTemplate` `.tres` files exist with traits, stats, and appearance
+- [x] At least one `Trait` `.tres` per category (skill, interest, dislike, personality)
+- [x] At least two `DialogueTopic` `.tres` files with conditions and deltas
+- [x] At least two `Item` `.tres` files
+- [x] All resources load in the editor without errors
