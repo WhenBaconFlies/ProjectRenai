@@ -4,8 +4,8 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Folders `scenes/`, `scripts/`, `resources/`, `assets/`, `mods/`, `saves/` exist under `res://`
-- [ ] `.gitignore` ignores `.godot/`
-- [ ] Project opens in Godot 4.2 without errors after the change
+- [x] Folders `scenes/`, `scripts/`, `resources/`, `assets/`, `mods/`, `saves/` exist under `res://`
+- [x] `.gitignore` ignores `.godot/`
+- [x] Project opens in Godot 4.2 without errors after the change
