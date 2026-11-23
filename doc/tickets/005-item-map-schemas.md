@@ -4,10 +4,10 @@
 
 **Blocked by:** 001 (Project scaffolding)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `Item` resource class exists with `PackedScene` reference, sprite/collider data, and properties
-- [ ] `Map` resource class exists with tile data, placed objects, spawn point, and navmesh data
-- [ ] `Map` has a `chunk_size` field (tiles, default 32) with derived chunk grid dimensions
-- [ ] A `.tres` of each type can be created and saved in the editor without errors
-- [ ] Fields are typed and documented with comments
+- [x] `Item` resource class exists with `PackedScene` reference, sprite/collider data, and properties
+- [x] `Map` resource class exists with tile data, placed objects, spawn point, and navmesh data
+- [x] `Map` has a `chunk_size` field (tiles, default 32) with derived chunk grid dimensions
+- [x] A `.tres` of each type can be created and saved in the editor without errors
+- [x] Fields are typed and documented with comments
