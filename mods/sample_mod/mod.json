@@ -1,0 +1,13 @@
+{
+  "id": "sample_mod",
+  "name": "Sample Mod",
+  "version": "1.0.0",
+  "author": "Project Renai",
+  "entry": "entry.gd",
+  "dependencies": [],
+  "content": [
+    "char_sample.tres",
+    "trait_sample.tres",
+    "topic_sample.tres"
+  ]
+}
