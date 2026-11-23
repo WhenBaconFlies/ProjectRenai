@@ -126,6 +126,15 @@ Records the clarification decisions made during the brainstorming session.
 - **Margin scaling:** handled by the resolution step (ticket 015), not the schema.
 - **Verification:** `DialogueTopic.new()` instantiates and `ResourceSaver.save` + `ResourceLoader.load` round-trips all fields; registered in the global script class cache so it appears in the editor's "New Resource" dialog.
 
+### Ticket 008 — Map renderer (implementation decisions)
+- **File:** `res://scripts/MapRenderer.gd`, `class_name MapRenderer extends Node2D`.
+- **Entry point:** exported `map: Map`; `render(map)` builds (or rebuilds) the world and is also called from `_ready()` when `map` is assigned. `Game.tscn` now contains a `MapRenderer` child wired to `map_school.tres`.
+- **Tilemap:** a `TileMap` named "TileMap". Uses `map.tile_set` when provided; otherwise generates a fallback `TileSet` (one grey tile, `tile_size` from map) so maps without an authored tileset still render. Cells set from flat row-major `tile_ids` (-1 clears).
+- **Placed objects:** a `Node2D` named "PlacedObjects" with one child per `placed_objects` entry, instantiated from `item.packed_scene` (or a bare `Node2D` when missing). Position taken from the entry's `position`. Sprite/collider data from `Item` is applied (Sprite2D from `sprite` or a type-colored placeholder; StaticBody2D + CollisionShape2D when `blocks_movement`, using `collider_shape` or a default rectangle).
+- **Navigation:** a `NavigationRegion2D` named "NavigationRegion2D" with `navigation_polygon = map.navigation_mesh`.
+- **Spawn point:** exposed as `spawn_point: Vector2` and `get_spawn_point()`, plus a `Marker2D` named "SpawnPoint" at that position.
+- **Empty maps:** renders tilemap + (empty) PlacedObjects + nav region + spawn marker without errors.
+
 ### Ticket 005 — Item + Map schemas (implementation decisions)
 - **Item fields:** `id`, `type`, `packed_scene: PackedScene`, sprite data (`sprite`, `sprite_offset`, `sprite_scale`), collider data (`collider_shape`, `collider_offset`), and furniture/wall properties (`blocks_movement`, `blocks_sight`, `interactable`, plus free-form `properties: Dictionary`).
 - **Map tile data:** `width`, `height`, `tile_size`, optional `tile_set`, and a flat row-major `tile_ids: PackedInt32Array` (-1 = empty).

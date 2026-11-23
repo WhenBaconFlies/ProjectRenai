@@ -13,3 +13,6 @@
 - [ ] Map editor displays a chunk grid overlay
 - [ ] A map with varying dimensions produces the correct chunk grid
 - [ ] No pop-in or missing tiles during normal movement within the buffer zone
+
+## Notes from ticket 008
+- `MapRenderer.render()` currently frees previous children with `queue_free()` and then builds replacements in the same call, so a re-render within one frame can briefly leave duplicate nodes in the tree (low finding in `doc/code-review/codereview-ticket-008-map-renderer.md`). When implementing chunk load/unload (which re-renders), prefer removing children from the tree synchronously before queuing them for deletion, e.g. `remove_child(child); child.queue_free()`.
