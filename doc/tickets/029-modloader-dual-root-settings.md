@@ -4,11 +4,11 @@
 
 **Blocked by:** 025 (SettingsManager + ConfigFile persistence)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] `ModLoader` scans both `res://mods/` and `user://mods/` and registers resources from both
-- [ ] Enable/disable is read from settings flags, not `.disabled` markers
-- [ ] Duplicate ids across roots are rejected add-only with a logged diagnostic
-- [ ] Dependencies resolve topologically across both roots; cycles and missing deps skip cleanly
-- [ ] Entry hooks and `get_last_report()` still work
-- [ ] Headless tests exercise a synthetic `user://` mod tree without touching real content
+- [x] `ModLoader` scans both `res://mods/` and `user://mods/` and registers resources from both
+- [x] Enable/disable is read from settings flags, not `.disabled` markers
+- [x] Duplicate ids across roots are rejected add-only with a logged diagnostic
+- [x] Dependencies resolve topologically across both roots; cycles and missing deps skip cleanly
+- [x] Entry hooks and `get_last_report()` still work
+- [x] Headless tests exercise a synthetic `user://` mod tree without touching real content

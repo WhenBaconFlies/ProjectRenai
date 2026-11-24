@@ -70,11 +70,25 @@ const BASE_RESPONSES_DIR: String = "res://resources/dialogue/responses/"
 
 const BASE_OWNER: String = "base"
 
+## Add-only conflicts are resolved by source priority, not by incidental load
+## order: base content outranks every root, earlier roots outrank later roots,
+## and ad-hoc register_resource() calls from outside a load rank last. Lower
+## numbers win. This keeps bundled content authoritative even when a dependency
+## forces a bundled mod to load after an independent user mod.
+const BASE_PRIORITY: int = -1
+const EXTERNAL_PRIORITY: int = 999
+
 ## bucket name -> { stable id (String) -> Resource }
 var _registries: Dictionary = {}
 
 ## "bucket:id" -> mod id (String). Tracks ownership for diagnostics.
 var _owners: Dictionary = {}
+
+## "bucket:id" -> source priority (int). Used to settle cross-root conflicts.
+var _priorities: Dictionary = {}
+
+## Priority applied to registrations made during the current loading step.
+var _current_priority: int = EXTERNAL_PRIORITY
 
 ## Mod ids that loaded successfully, in load (topological) order.
 var _loaded_mods: Array[String] = []
@@ -114,12 +128,23 @@ func register_resource(type: String, resource: Resource, mod_id: String = "") ->
 		return false
 
 	var bucket: Dictionary = _registries[type]
+	var key: String = type + ":" + id
 	if bucket.has(id):
-		_log("WARN: add-only conflict for '%s:%s' (mod '%s'): already owned by mod '%s'; skipping" % [type, id, mod_id, str(_owners.get(type + ":" + id, "unknown"))])
-		return false
+		var existing_priority: int = int(_priorities.get(key, EXTERNAL_PRIORITY))
+		if _current_priority >= existing_priority:
+			_log("WARN: add-only conflict for '%s:%s' (mod '%s'): already owned by mod '%s'; skipping" % [type, id, mod_id, str(_owners.get(key, "unknown"))])
+			return false
+		# An earlier root (or base content) registered late because of dependency
+		# order. Keep its resource and reject the later-root claim instead.
+		_log("WARN: add-only conflict for '%s:%s' (mod '%s'): later/higher-index source rejected in favour of mod '%s'" % [type, id, mod_id, str(_owners.get(key, "unknown"))])
+		bucket[id] = resource
+		_priorities[key] = _current_priority
+		_owners[key] = mod_id
+		return true
 
 	bucket[id] = resource
-	_owners[type + ":" + id] = mod_id
+	_priorities[key] = _current_priority
+	_owners[key] = mod_id
 	return true
 
 
@@ -200,8 +225,8 @@ func load_mods_from_roots(root_paths: Array) -> void:
 	# Discovery merges every root into one id -> manifest map. A duplicate id in
 	# a later root is rejected here, preserving the bundled root's mod.
 	var mods: Dictionary = {}
-	for root_path in _mods_roots:
-		_discover_mods(root_path, mods)
+	for root_index in _mods_roots.size():
+		_discover_mods(_mods_roots[root_index], mods, root_index)
 
 	# Player toggles live in SettingsManager. Filtering before the sort keeps a
 	# disabled mod out of cycles and out of dependency satisfaction entirely.
@@ -229,6 +254,8 @@ func _reset_registries() -> void:
 		TYPE_RESPONSE: {},
 	}
 	_owners.clear()
+	_priorities.clear()
+	_current_priority = EXTERNAL_PRIORITY
 	_loaded_mods.clear()
 	_last_report.clear()
 
@@ -238,6 +265,8 @@ func _reset_registries() -> void:
 ## the clear) so re-scans restore base content. A missing directory is a soft
 ## warning, never a crash — gameplay can still run from mod content alone.
 func _register_base_content() -> void:
+	# Base content is authoritative: even a bundled mod must not shadow it.
+	_current_priority = BASE_PRIORITY
 	for path in _base_resource_paths(BASE_CHARACTERS_DIR):
 		var resource: Resource = ResourceLoader.load(path)
 		if resource is CharacterTemplate:
@@ -272,6 +301,7 @@ func _register_base_content() -> void:
 			register_resource(TYPE_RESPONSE, resource, BASE_OWNER)
 		else:
 			_log("WARN: base content '%s' is not a DialogueResponse; skipping" % path)
+	_current_priority = EXTERNAL_PRIORITY
 
 
 ## Resource file paths in one authored base directory, sorted for stable order.
@@ -296,7 +326,7 @@ func _base_resource_paths(dir_path: String) -> Array[String]:
 ## Scan `root_path` for direct subfolders that are mod candidates and merge the
 ## validated manifests into `mods`. Scan order is the caller's responsibility:
 ## an id already present is skipped, so the earlier (bundled) root wins.
-func _discover_mods(root_path: String, mods: Dictionary) -> void:
+func _discover_mods(root_path: String, mods: Dictionary, root_index: int = 0) -> void:
 	var dir: DirAccess = DirAccess.open(root_path)
 	if dir == null:
 		# A missing root is normal for user://mods/ on a fresh install: warn but
@@ -332,6 +362,7 @@ func _discover_mods(root_path: String, mods: Dictionary) -> void:
 						_add_report("%s@%s" % [mod_id, entry], "skipped", "duplicate mod id", folder)
 					else:
 						manifest["_folder_path"] = folder
+						manifest["_root_index"] = root_index
 						mods[mod_id] = manifest
 		entry = dir.get_next()
 	dir.list_dir_end()
@@ -471,6 +502,9 @@ func _load_one_mod(mod_id: String, mods: Dictionary) -> void:
 		return
 
 	# 4. Content resources: load by path, auto-register by class + stable id.
+	#    The root index travels with the manifest so conflicts are settled by
+	#    source priority rather than by this topological load position.
+	_current_priority = int(manifest.get("_root_index", EXTERNAL_PRIORITY))
 	for content in manifest.get("content", []):
 		var content_path: String = _resolve_path(str(content), folder)
 		if not ResourceLoader.exists(content_path):
@@ -490,6 +524,7 @@ func _load_one_mod(mod_id: String, mods: Dictionary) -> void:
 	#    v1 convention is `extends RefCounted`; Nodes are freed after the call.
 	var instance: Object = (script as Script).new()
 	if instance == null:
+		_current_priority = EXTERNAL_PRIORITY
 		_log("SKIP mod '%s': could not instantiate entry script '%s'" % [mod_id, entry_path])
 		_add_report(mod_id, "skipped", "entry script could not be instantiated", folder)
 		return
@@ -497,6 +532,7 @@ func _load_one_mod(mod_id: String, mods: Dictionary) -> void:
 		instance.call("register", self)
 	if instance is Node:
 		(instance as Node).free()
+	_current_priority = EXTERNAL_PRIORITY
 
 	_loaded_mods.append(mod_id)
 	_add_report(mod_id, "loaded", "", folder)

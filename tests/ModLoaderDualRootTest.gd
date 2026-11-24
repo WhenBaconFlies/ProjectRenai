@@ -15,10 +15,12 @@ const ROOT_B: String = "user://modloader029_root_b/"
 const SETTINGS_PATH: String = "user://modloader029_settings.cfg"
 const ENTRY_MARKER: String = "user://modloader029_entry_marker.txt"
 
-const EXPECTED_CHECKS: int = 16
+const EXPECTED_CHECKS: int = 19
 
 var _passed: int = 0
 var _failed: int = 0
+## Executed checks are counted separately so one defect reports one failure.
+var _executed: int = 0
 
 
 func _ready() -> void:
@@ -48,6 +50,7 @@ func _run() -> void:
 	_make_fixtures()
 	SettingsManager.set_mod_enabled("dual:disabled", false)
 	SettingsManager.set_mod_enabled("dual:cycle_disabled_a", false)
+	SettingsManager.set_mod_enabled("dual:user_disabled", false)
 	ModLoader.load_mods_from_roots([ROOT_A, ROOT_B])
 
 	# --- Registration from both roots ----------------------------------------
@@ -98,6 +101,19 @@ func _run() -> void:
 		and _report_has("dual:needs_disabled", "skipped", "missing dependency"),
 		"T9: a disabled mod does not satisfy another mod's dependency")
 
+	# --- Root priority beats incidental topological load order ---------------
+	var conflict_topic: DialogueTopic = ModLoader.get_resource(ModLoader.TYPE_DIALOGUE, "topic:dual_conflict") as DialogueTopic
+	_check(conflict_topic != null and conflict_topic.text == "bundled conflict",
+		"T14: a bundled resource wins a duplicate id even when the user copy registers first")
+
+	_check(not loaded.has("dual:user_disabled")
+		and not ModLoader.has_resource(ModLoader.TYPE_DIALOGUE, "topic:dual_user_disabled")
+		and _report_has("dual:user_disabled", "skipped", "disabled"),
+		"T15: a settings flag disables a mod in the user-writable root")
+	_check(not loaded.has("dual:manifest_disabled")
+		and _report_has("dual:manifest_disabled", "skipped", "manifest enabled=false"),
+		"T16: a manifest enabled=false disables a mod in the user-writable root")
+
 	# --- Entry hooks and diagnostics -----------------------------------------
 	_remove_file(ENTRY_MARKER)
 	ModLoader.load_mods_from_roots([ROOT_A, ROOT_B])
@@ -118,7 +134,7 @@ func _run() -> void:
 		and not ModLoader.has_resource(ModLoader.TYPE_DIALOGUE, "topic:dual_dup_a"),
 		"T12: load_mods(single_path) keeps the v1 one-root test seam")
 
-	_check(_passed == EXPECTED_CHECKS - 1,
+	_check(_executed == EXPECTED_CHECKS - 1,
 		"T13: all expected 029 checks executed")
 	_cleanup()
 	_finish()
@@ -133,11 +149,17 @@ func _make_fixtures() -> void:
 	_write_mod(ROOT_A, "duplicate", "dual:duplicate", [], ["topic:dual_dup_a"], "bundled duplicate")
 	_write_mod(ROOT_A, "marker", "dual:marker", [], ["topic:dual_marker"], "marked text")
 	_write_text(ROOT_A + "marker/.disabled", "")
+	# Bundled mod that depends on a user-root mod: it loads after the user root,
+	# but its resource id must still win the add-only conflict (T14).
+	_write_mod(ROOT_A, "dep_conflict", "dual:dep_conflict", ["dual:user_dep"], ["topic:dual_conflict"], "bundled conflict")
+	_write_mod(ROOT_A, "cycle_a", "dual:cycle_a", ["dual:cycle_b"], [], "cycle a")
 
 	_write_mod(ROOT_B, "user_dep", "dual:user_dep", [], ["topic:dual_user_dep"], "user dependency")
 	_write_mod(ROOT_B, "user_dup", "dual:duplicate", [], ["topic:dual_dup_b"], "user duplicate")
 	_write_mod(ROOT_B, "resource_dup", "dual:resource_dup", [], ["topic:dual_base"], "user resource duplicate")
-	_write_mod(ROOT_B, "cycle_a", "dual:cycle_a", ["dual:cycle_b"], [], "cycle a")
+	_write_mod(ROOT_B, "user_conflict", "dual:user_conflict", [], ["topic:dual_conflict"], "user conflict")
+	_write_mod(ROOT_B, "user_disabled", "dual:user_disabled", [], ["topic:dual_user_disabled"], "user disabled text")
+	_write_mod(ROOT_B, "manifest_disabled", "dual:manifest_disabled", [], ["topic:dual_manifest_disabled"], "manifest disabled text", false)
 	_write_mod(ROOT_B, "cycle_b", "dual:cycle_b", ["dual:cycle_a"], [], "cycle b")
 	_write_mod(ROOT_B, "cycle_disabled_a", "dual:cycle_disabled_a", ["dual:cycle_disabled_b"], [], "disabled cycle a")
 	_write_mod(ROOT_B, "cycle_disabled_b", "dual:cycle_disabled_b", ["dual:cycle_disabled_a"], [], "disabled cycle b")
@@ -262,6 +284,7 @@ func _cleanup() -> void:
 ## --- Assertion / completion -------------------------------------------------
 
 func _check(ok: bool, label: String) -> void:
+	_executed += 1
 	if ok:
 		_passed += 1
 		print("[029] PASS " + label)
