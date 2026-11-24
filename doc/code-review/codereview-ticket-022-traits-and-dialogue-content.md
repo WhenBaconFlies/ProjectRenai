@@ -15,7 +15,7 @@
 - **Evidence:** `grep '^checked_stat = ' resources/dialogue/responses` over all 24 response files returns `checked_stat = ""` for 23 of them; the only non-empty value is `"charisma"` in `response_ask_day_success.tres:12`, which was authored by ticket 021. `scripts/DialogueResponse.gd:84-85` defines `is_line_only()` as `checked_stat.is_empty()`, so the 22 responses added by 022 are all line-only reactions with no roll and no deltas. `doc/idea-v2-decisions.md:59` requires the NPC-initiated player reply to be "a normal topic + roll using its own roll fields; its deltas are the final affection/mood change," and states reply options are selected by `topic_id` plus filters because outcome/band "do not exist at selection time." The one rollable response is keyed to `outcomes = ["success"]` and `relationship_bands = ["Friend", "Lover"]` (`response_ask_day_success.tres:13-14`), so it is not a wildcard reply option for `topic_id`-based selection.
 - **Problem:** Ticket 023 will have no authored rollable reply for any topic except `topic:ask_day`, forcing it either to reuse one line for every NPC opening topic or to author new content outside the content ticket.
 - **Recommendation:** Decide the reply contract in 023 first. If `DialogueResponse` keeps no trait/mood filter fields, add 2–3 rollable replies with `topic_id` set and `outcomes`/`relationship_bands` empty (e.g. `response:ask_day_reply`, `response:talk_sports_reply`, `response:compliment_reply`) with `checked_stat`, `difficulty`, and success/failure deltas authored, and extend the harness so it asserts at least one non-line-only response exists for several topics. If 023 instead adds explicit reply-filter fields to the schema, keep 022 unchanged and record that decision so a later content ticket owns the replies.
-- **Resolution:** Open — user decision requested.
+- **Resolution:** Fixed — added three rollable wildcard reply resources (`response:ask_day_reply` with `charisma` 5, `response:talk_sports_reply` with `dexterity` 5, `response:compliment_reply` with `charisma` 6; all keyed by `topic_id`, empty `outcomes`/`relationship_bands`, with success/failure deltas). `tests/TraitsAndDialogueContentTest.gd` T9 now requires a *line-only* default per topic so rollable replies cannot be mistaken for one, and new T22 asserts rollable reply options exist for at least three topics. Response total is now 27, dialogue total 55 (still within 40–60); decision record updated.
 
 ### 2. [Low][Testing] Harness rejects a zero point cost the schema allows
 
@@ -23,7 +23,7 @@
 - **Evidence:** T7 fails a trait when `trait_resource.point_cost == 0`, while `Trait.gd:25` declares `@export var point_cost: int = 0`; zero is therefore a valid authored value. All 24 current traits happen to have non-zero costs, so the test passes today, but a legitimate free trait would make the content harness fail.
 - **Problem:** The assertion enforces a policy the resource schema does not define.
 - **Recommendation:** Drop the `point_cost == 0` condition (keep the non-empty tags check) and rename the T7 label to match, or document in `doc/idea-v2-decisions.md` that 022 intentionally requires non-zero trait costs.
-- **Resolution:** Open — user decision requested.
+- **Resolution:** Fixed — `_traits_well_formed()` no longer rejects `point_cost == 0`; it keeps the non-empty tags check and documents that `Trait.gd:25` permits zero. T7's label was updated to match.
 
 ## Evidence audit
 
@@ -33,7 +33,7 @@
 
 ## Verification record (not findings)
 
-- `tests/run_traits_and_dialogue_tests.ps1`: `passed=22 failed=0`, `ALL_022_CHECKS_PASSED`, `TRAITS_DIALOGUE_022_OK`.
+- `tests/run_traits_and_dialogue_tests.ps1`: `passed=23 failed=0`, `ALL_022_CHECKS_PASSED`, `TRAITS_DIALOGUE_022_OK`.
 - `tests/run_dialogue_schema_tests.ps1` (021 regression): `passed=23 failed=0`, `DIALOGUE_021_OK`.
 - `tests/run_integration.ps1` (v1 day loop, ticket 018): `passed=41 failed=0`, `INTEGRATION_018_OK`.
 - `tests/run_chunk_tests_019.ps1`: `60 passed, 0 failed`, `CHUNKMANAGER_019_OK`.

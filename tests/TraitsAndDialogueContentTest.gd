@@ -19,8 +19,8 @@ const RESPONSES_DIR: String = "res://resources/dialogue/responses/"
 const EXPECTED_TRAITS: int = 24
 const EXPECTED_GREETINGS: int = 12
 const EXPECTED_TOPICS: int = 16
-const EXPECTED_RESPONSES: int = 24
-const EXPECTED_CHECKS: int = 22
+const EXPECTED_RESPONSES: int = 27
+const EXPECTED_CHECKS: int = 23
 
 const STATS: Array[String] = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
 const CATEGORIES: Array[String] = ["skill", "interest", "dislike", "personality"]
@@ -43,14 +43,14 @@ func _run() -> void:
 	_check(_count_files(TRAITS_DIR) == EXPECTED_TRAITS, "T1: 24 authored trait .tres files")
 	_check(_count_files(GREETINGS_DIR) == EXPECTED_GREETINGS, "T2: 12 authored greeting .tres files")
 	_check(_count_files(TOPICS_DIR) == EXPECTED_TOPICS, "T3: 16 authored player-topic .tres files")
-	_check(_count_files(RESPONSES_DIR) == EXPECTED_RESPONSES, "T4: 24 authored response .tres files")
+	_check(_count_files(RESPONSES_DIR) == EXPECTED_RESPONSES, "T4: 27 authored response .tres files")
 	var dialogue_total: int = greetings.size() + topics.size() + responses.size()
 	_check(dialogue_total >= 40 and dialogue_total <= 60, "T5: %d dialogue resources are in the 40-60 range" % dialogue_total)
 
 	_check(_categories_covered(traits), "T6: all four trait categories are authored")
-	_check(_traits_well_formed(traits), "T7: every trait has a name, category, point cost and tags")
+	_check(_traits_well_formed(traits), "T7: every trait has a name, category and tags")
 	_check(_ids_unique(_ids(traits)), "T8: authored trait ids are unique")
-	_check(_default_responses_cover_topics(topics, responses), "T9: every topic has an authored default response")
+	_check(_default_responses_cover_topics(topics, responses), "T9: every topic has a line-only authored default response")
 	_check(_has_generic_response(responses), "T10: a generic authored fallback response exists")
 	_check(_specific_responses_exist(responses), "T11: exact-match outcome/band responses exist")
 	_check(_bands_valid_and_covered(greetings, responses), "T12: relationship bands are valid and all five are greeted")
@@ -63,7 +63,8 @@ func _run() -> void:
 	_check(_smoke_greeting(), "T19: default player/NPC pair has an eligible authored greeting")
 	_check(_smoke_response(topics), "T20: default player/NPC pair has an eligible base topic with a default response")
 	_check(_files_load_and_register(traits, greetings, topics, responses), "T21: every authored file loads and registers in its bucket")
-	_check(_passed == EXPECTED_CHECKS - 1, "T22: all expected 022 checks executed")
+	_check(_rollable_replies_exist(responses), "T22: rollable reply options exist for several topics")
+	_check(_passed == EXPECTED_CHECKS - 1, "T23: all expected 022 checks executed")
 	_finish()
 
 
@@ -179,7 +180,8 @@ func _traits_well_formed(traits: Array) -> bool:
 			return false
 		if not CATEGORIES.has(trait_resource.category):
 			return false
-		if trait_resource.point_cost == 0 or trait_resource.tags.is_empty():
+		# Trait.gd permits point_cost = 0, so only the tag list is required here.
+		if trait_resource.tags.is_empty():
 			return false
 	return true
 
@@ -197,6 +199,7 @@ func _default_responses_cover_topics(topics: Array, responses: Array) -> bool:
 				and response.topic_id == topic.id
 				and response.outcomes.is_empty()
 				and response.relationship_bands.is_empty()
+				and response.is_line_only()
 			):
 				defaults += 1
 		if defaults == 0:
@@ -226,6 +229,24 @@ func _specific_responses_exist(responses: Array) -> bool:
 		if response != null and not response.outcomes.is_empty() and not response.relationship_bands.is_empty():
 			count += 1
 	return count >= 6
+
+
+## The NPC-initiated reply flow needs rollable lines with their own deltas.
+## Empty outcome/band keys make them topic-level reply options rather than
+## exact-match reactions; is_line_only() keeps them distinct from topic defaults.
+func _rollable_replies_exist(responses: Array) -> bool:
+	var topics: Dictionary = {}
+	for item in responses:
+		var response: DialogueResponse = item as DialogueResponse
+		if (
+			response != null
+			and not response.is_line_only()
+			and not response.topic_id.is_empty()
+			and response.outcomes.is_empty()
+			and response.relationship_bands.is_empty()
+		):
+			topics[response.topic_id] = true
+	return topics.size() >= 3
 
 
 func _valid_bands() -> Array[String]:

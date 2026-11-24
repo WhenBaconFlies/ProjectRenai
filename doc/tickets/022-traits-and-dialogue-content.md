@@ -7,7 +7,7 @@
 **Status:** complete
 
 - [x] ~15–20 new traits exist as `.tres` across all four categories with point costs and tags (18 new, 24 total)
-- [x] ~40–60 dialogue topics exist as `.tres` across greetings, topics, and responses (12 + 16 + 24 = 52 total)
+- [x] ~40–60 dialogue topics exist as `.tres` across greetings, topics, and responses (12 + 16 + 27 = 55 total)
 - [x] Each topic has at least one authored default response (blank band/outcome)
 - [x] Greetings cover the four variation factors (relationship, mood, period, traits/interests)
 - [x] All content loads through `ModLoader` base registration with no duplicate-id conflicts
