@@ -13,7 +13,7 @@ const ROOT_A: String = "user://mods031_root_a/"
 const ROOT_B: String = "user://mods031_root_b/"
 const SETTINGS_PATH: String = "user://mods031_settings.cfg"
 const MODS_SCENE: String = "res://scenes/ModsMenu.tscn"
-const EXPECTED_CHECKS: int = 24
+const EXPECTED_CHECKS: int = 27
 
 var _passed: int = 0
 var _failed: int = 0
@@ -52,10 +52,10 @@ func _run() -> void:
 	_snapshot = ModLoader.get_installed_mods()
 
 	# --- Loader snapshot: metadata, status and diagnostics from both roots ----
-	_check(_snapshot.size() == 6 and _entry("menu:base") != null
+	_check(_snapshot.size() == 8 and _entry("menu:base") != null
 		and _entry("menu:user") != null and _entry("bad_manifest") != null
-		and _entry("no_manifest") != null,
-		"T1: all six discovered mods from both roots appear in the snapshot")
+		and _entry("no_manifest") != null and _entry("menu:author_disabled") != null,
+		"T1: all eight discovered mods from both roots appear in the snapshot")
 	var base: Dictionary = _entry("menu:base")
 	var user: Dictionary = _entry("menu:user")
 	_check(base.get("name", "") == "Base Mod" and base.get("version", "") == "1.2.3"
@@ -68,6 +68,10 @@ func _run() -> void:
 	var needs: Dictionary = _entry("menu:needs_disabled")
 	var bad: Dictionary = _entry("bad_manifest")
 	var no_manifest: Dictionary = _entry("no_manifest")
+	var duplicate: Dictionary = _entry("duplicate")
+	_check(duplicate.get("status", "") == "skipped"
+		and str(duplicate.get("reason", "")).contains("duplicate mod id"),
+		"T3b: a duplicate-id skip is listed under its folder name with its reason")
 	_check(disabled.get("status", "") == "skipped"
 		and str(disabled.get("reason", "")).contains("disabled (settings flag)")
 		and needs.get("status", "") == "skipped"
@@ -128,6 +132,12 @@ func _run() -> void:
 		and disabled_toggle != null and not disabled_toggle.button_pressed
 		and user_toggle != null and user_toggle.button_pressed,
 		"T10: toggles reflect stored settings flags (disabled mod is off)")
+	var author_row: int = _row_index("menu:author_disabled")
+	var author_toggle := _node("ModScroll/ModBox/ModRow_%d/ToggleButton" % author_row) as CheckButton
+	var author_status := _node("ModScroll/ModBox/ModRow_%d/StatusLabel" % author_row) as Label
+	_check(author_toggle != null and not author_toggle.button_pressed and author_toggle.disabled
+		and author_status != null and author_status.text.contains("manifest enabled=false"),
+		"T10b: an author-disabled mod shows an off, locked toggle consistent with its status")
 
 	# --- Toggling writes settings, shows a notice and does NOT rescan ---------
 	var loaded_before: Array = ModLoader.get_loaded_mods().duplicate()
@@ -151,6 +161,21 @@ func _run() -> void:
 		and not SettingsManager.get_mod_flags().has("menu:disabled")
 		and notice != null and notice.visible,
 		"T14: enabling removes the flag and keeps the restart notice")
+
+	# Simulate Back + reopen: a fresh instance must read live settings rather
+	# than the load-time snapshot, and remember the pending restart.
+	_menu.queue_free()
+	await _settle()
+	_menu = (load(MODS_SCENE) as PackedScene).instantiate() as Control
+	get_tree().root.add_child(_menu)
+	await _settle()
+	var reopened_base := _node("ModScroll/ModBox/ModRow_%d/ToggleButton" % base_row) as CheckButton
+	var reopened_disabled := _node("ModScroll/ModBox/ModRow_%d/ToggleButton" % disabled_row) as CheckButton
+	var reopened_notice := _node("RestartNotice") as Label
+	_check(reopened_base != null and not reopened_base.button_pressed
+		and reopened_disabled != null and reopened_disabled.button_pressed
+		and reopened_notice != null and reopened_notice.visible,
+		"T14b: reopening the menu shows live flags and the pending restart notice")
 
 	# --- Next launch applies the flags and dependency satisfaction -----------
 	ModLoader.load_mods_from_roots([ROOT_A, ROOT_B])
@@ -202,7 +227,9 @@ func _make_fixtures() -> void:
 	_write_mod(ROOT_A, "base", "menu:base", "Base Mod", "1.2.3", "Tester", [])
 	_write_mod(ROOT_A, "disabled", "menu:disabled", "Disabled Mod", "2.0", "Tester", [])
 	_write_mod(ROOT_A, "needs_disabled", "menu:needs_disabled", "Needs Disabled", "1.0", "Tester", ["menu:disabled"])
+	_write_mod(ROOT_A, "author_disabled", "menu:author_disabled", "Author Disabled", "1.0", "Tester", [], false)
 	_write_mod(ROOT_B, "user", "menu:user", "User Mod", "0.9", "User", ["menu:base"])
+	_write_mod(ROOT_B, "duplicate", "menu:base", "User Duplicate", "9.9", "User", [])
 	var bad: Dictionary = _manifest("menu:bad", "Bad Mod", "1.0", "Nobody", [], "entry.gd")
 	bad.erase("author")
 	_write_text(ROOT_B + "bad_manifest/mod.json", JSON.stringify(bad))
@@ -229,8 +256,11 @@ func _entry_code() -> String:
 
 
 func _write_mod(root: String, folder: String, id: String, name: String,
-		version: String, author: String, deps: Array) -> void:
-	_write_text(root + folder + "/mod.json", JSON.stringify(_manifest(id, name, version, author, deps, "entry.gd")))
+		version: String, author: String, deps: Array, author_enabled: bool = true) -> void:
+	var manifest: Dictionary = _manifest(id, name, version, author, deps, "entry.gd")
+	if not author_enabled:
+		manifest["enabled"] = false
+	_write_text(root + folder + "/mod.json", JSON.stringify(manifest))
 	_write_text(root + folder + "/entry.gd", _entry_code())
 
 

@@ -396,7 +396,9 @@ func _discover_mods(root_path: String, mods: Dictionary, root_index: int = 0) ->
 						# Composite key keeps this skip distinct from the surviving
 						# mod's report entry, which uses the bare `mod_id`.
 						_add_report("%s@%s" % [mod_id, entry], "skipped", "duplicate mod id", folder)
-						_note_discovery_skip(mod_id, folder, "duplicate mod id", root_index, manifest)
+						# Folder name (not the surviving mod's id) keeps this row
+						# distinct from the loaded mod in the menu snapshot.
+						_note_discovery_skip(entry, folder, "duplicate mod id", root_index, {})
 					else:
 						manifest["_folder_path"] = folder
 						manifest["_root_index"] = root_index

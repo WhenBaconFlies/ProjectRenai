@@ -30,8 +30,12 @@ var _mods: Array = []
 
 func _ready() -> void:
 	_title_label.text = screen_title
-	_restart_notice.visible = false
 	_populate()
+	# The snapshot is frozen at load time; settings are the live source of truth.
+	# Show the notice on entry when they disagree, so Back + reopen cannot hide a
+	# pending restart (the pause overlay re-instances this screen on every open).
+	_restart_notice.text = RESTART_TEXT
+	_restart_notice.visible = _has_pending_restart()
 	_back_button.pressed.connect(_on_back_pressed)
 	_back_button.grab_focus()
 
@@ -91,12 +95,30 @@ func _make_row(index: int, entry: Dictionary) -> Control:
 	var toggle := CheckButton.new()
 	toggle.name = "ToggleButton"
 	toggle.text = "Enabled"
-	toggle.button_pressed = bool(entry.get("settings_enabled", true))
-	toggle.disabled = not bool(entry.get("togglable", false))
+	var togglable: bool = bool(entry.get("togglable", false))
+	# Use the live setting and the effective (author-aware) state, not the frozen
+	# snapshot flag: an author-hard-disabled or invalid mod must read as off.
+	toggle.button_pressed = togglable and SettingsManager.get_mod_enabled(mod_id)
+	toggle.disabled = not togglable
 	toggle.toggled.connect(Callable(self, "_on_toggle").bind(index))
 	row.add_child(toggle)
 
 	return row
+
+
+## True when a player toggle has not yet been applied by a restart: the live
+## settings flag differs from what the loader saw on the last launch.
+func _has_pending_restart() -> bool:
+	for entry_variant in _mods:
+		var entry: Dictionary = entry_variant
+		if not bool(entry.get("togglable", false)):
+			continue
+		var mod_id: String = str(entry.get("id", ""))
+		if mod_id.is_empty():
+			continue
+		if SettingsManager.get_mod_enabled(mod_id) != bool(entry.get("settings_enabled", true)):
+			return true
+	return false
 
 
 ## Signal payload is (pressed, index) because the index is bound at row build.
@@ -115,7 +137,6 @@ func _on_toggle(pressed: bool, index: int) -> void:
 		SettingsManager.set_mod_enabled(mod_id, false)
 	entry["settings_enabled"] = pressed
 	# No load_mods() call and no status refresh: the change applies next launch.
-	_restart_notice.text = RESTART_TEXT
 	_restart_notice.visible = true
 
 
