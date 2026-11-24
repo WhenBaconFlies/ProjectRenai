@@ -60,6 +60,12 @@ Source context: `doc/idea-v0.md` (original concept), `doc/idea-v1-final.md` (v1 
 - **Response keying party:** the 5-type relationship band is derived for the **responder toward the speaker** (for player-initiated: the NPC's meter toward the player), since that is what the spoken line expresses.
 - **Mods Menu deployment:** support both project-local and exported builds. Bundled base mods stay in `res://mods/`; an additional `user://mods/` scan root is added. Enable/disable flags are written to `user://settings.cfg` (not `res://` `.disabled` markers), so the menu works in a read-only export. Changes take effect on next launch.
 
+## to-spec decisions (v2)
+- **Testing seam:** one persistent integration harness at the highest seam (menus/New Game → conversation → menus/settings/mods → save/reopen → relationship goal), reusing v1's marker-based pass/fail pattern; v1 harnesses re-run as regressions.
+- **Issue tracker:** v2 spec published as a GitHub issue with `ready-for-agent` label.
+- **User stories depth:** extensive — 42 stories covering conversations, overlay, content, menus, settings, saves, mods, NPC goals, verification.
+- **Builder details:** exact resolution presets, trait names/costs, schema defaults, Conversation method signatures, menu styling, and test counts remain builder choices; spec states the contracts only.
+
 ## Deferred unknowns (left to builder/plan)
 
 - Exact schema fields/defaults for greetings and responses (esp. greeting weight and response roll-field defaults).
