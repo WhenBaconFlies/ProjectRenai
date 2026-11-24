@@ -1,0 +1,107 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/PauseMenu.gd" id="1_pause_menu"]
+
+[node name="PauseMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_pause_menu")
+
+[node name="Dim" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.03, 0.04, 0.08, 0.62)
+
+[node name="Box" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -210.0
+offset_top = -230.0
+offset_right = 210.0
+offset_bottom = 230.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MenuBox" type="VBoxContainer" parent="Box"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Box/MenuBox"]
+layout_mode = 2
+text = "Paused"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 30
+
+[node name="Hint" type="Label" parent="Box/MenuBox"]
+layout_mode = 2
+text = "Esc resumes · the day clock is stopped"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 12
+
+[node name="StatusLabel" type="Label" parent="Box/MenuBox"]
+layout_mode = 2
+text = ""
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 13
+
+[node name="SaveRow" type="HBoxContainer" parent="Box/MenuBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SlotNameInput" type="LineEdit" parent="Box/MenuBox/SaveRow"]
+custom_minimum_size = Vector2(240, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Save slot name"
+
+[node name="SaveAsButton" type="Button" parent="Box/MenuBox/SaveRow"]
+custom_minimum_size = Vector2(100, 40)
+layout_mode = 2
+text = "Save As"
+
+[node name="LoadButton" type="Button" parent="Box/MenuBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Load Game"
+
+[node name="OptionsButton" type="Button" parent="Box/MenuBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Options"
+
+[node name="ModsButton" type="Button" parent="Box/MenuBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Mods Menu"
+
+[node name="ResumeButton" type="Button" parent="Box/MenuBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Resume"
+
+[node name="MainMenuButton" type="Button" parent="Box/MenuBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "Return to Main Menu"
+
+[node name="PanelHost" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2

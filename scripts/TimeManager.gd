@@ -93,6 +93,9 @@ signal break_day_started(day: int)
 
 var _state: int = DayState.IDLE
 var _running: bool = false
+## Pause overlay seam (ticket 028). The day stays running but `advance()` does
+## nothing while paused, so resuming continues from the exact phase elapsed time.
+var _paused: bool = false
 var _day_number: int = 0
 var _phase_elapsed: float = 0.0
 
@@ -144,6 +147,7 @@ func start_day(day_number: int = 1) -> void:
 	_reset_records()
 	_ensure_roster()
 	_running = true
+	_paused = false
 	_skip_in_progress = false
 	_skip_pause_remaining = 0.0
 	_phase_elapsed = 0.0
@@ -156,14 +160,28 @@ func start_day(day_number: int = 1) -> void:
 ## Halt the clock. State and records are left intact for inspection/restart.
 func stop_day() -> void:
 	_running = false
+	_paused = false
 	_skip_in_progress = false
 	_skip_pause_remaining = 0.0
 
 
+## Pause/resume the day clock without discarding phase elapsed time or records.
+## Ticket 028's pause overlay uses this instead of stop_day()+start_day(), which
+## would reset the day and lose the current phase's progress.
+func set_paused(paused: bool) -> void:
+	_paused = paused
+
+
+func is_paused() -> bool:
+	return _paused
+
+
 ## Advance the day clock by `delta` seconds. _process calls this every frame;
 ## tests call it with large deltas to cross phase boundaries deterministically.
+## Guarding here (not just in _process) means a paused clock cannot drift even
+## when a harness drives advance() directly.
 func advance(delta: float) -> void:
-	if not _running or delta <= 0.0:
+	if not _running or _paused or delta <= 0.0:
 		return
 
 	# A pending skip holds the phase clock while the fast-forward hook plays.
@@ -372,6 +390,7 @@ func restore_day_snapshot(snapshot: Dictionary) -> bool:
 	_skip_in_progress = false
 	_skip_pause_remaining = 0.0
 	_pending_day_started = false
+	_paused = false
 	_running = true
 	return true
 

@@ -4,11 +4,11 @@
 
 **Blocked by:** 024 (ConversationUI overlay + Game wiring), 026 (Main Menu + New Game routing)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] Escape opens the pause overlay when no conversation is open
-- [ ] Escape cancels a conversation instead of pausing when one is open
-- [ ] Save As creates a named slot from the current live game state
-- [ ] Load/Options/Mods/Resume route correctly
-- [ ] The day clock is halted while paused and resumes without drift
-- [ ] No overlap between the conversation overlay and the pause overlay
+- [x] Escape opens the pause overlay when no conversation is open
+- [x] Escape cancels a conversation instead of pausing when one is open
+- [x] Save As creates a named slot from the current live game state
+- [x] Load/Options/Mods/Resume route correctly
+- [x] The day clock is halted while paused and resumes without drift
+- [x] No overlap between the conversation overlay and the pause overlay
