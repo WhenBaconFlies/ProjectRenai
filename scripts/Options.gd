@@ -4,8 +4,8 @@
 ## and tick rates, Resolution (windowed presets + fullscreen) and a Language
 ## display. Every control writes through SettingsManager, so changes persist to
 ## `user://settings.cfg` and apply immediately where the engine allows it.
-## Display changes raise the restart notice; the relationship-feedback toggle is
-## deliberately absent (it stays a save-only/debug flag).
+## Display changes are applied immediately, so there is no restart notice. The
+## relationship-feedback toggle is deliberately absent (it stays a save-only/debug flag).
 ##
 ## The screen keeps PlaceholderScreen's `back_action` seam so the ticket-028
 ## pause overlay can embed it in place and route Back back to pause.
@@ -28,7 +28,6 @@ var back_action: Callable = Callable()
 @onready var _resolution_option: OptionButton = $SettingsScroll/SettingsBox/ResolutionRow/ResolutionOption
 @onready var _fullscreen_check: CheckButton = $SettingsScroll/SettingsBox/FullscreenRow/FullscreenCheck
 @onready var _language_option: OptionButton = $SettingsScroll/SettingsBox/LanguageRow/LanguageOption
-@onready var _restart_notice: Label = $RestartNotice
 @onready var _back_button: Button = $BackButton
 
 ## Suppresses write-back while controls are being initialised from stored values.
@@ -39,7 +38,6 @@ func _ready() -> void:
 	_title_label.text = screen_title
 	_populate()
 	_connect_controls()
-	SettingsManager.restart_required.connect(_on_restart_required)
 	_back_button.pressed.connect(_on_back_pressed)
 	_back_button.grab_focus()
 
@@ -82,8 +80,6 @@ func _populate() -> void:
 		_language_option.select(0)
 	_language_option.disabled = true
 
-	_restart_notice.text = ""
-	_restart_notice.visible = false
 	_populating = false
 
 
@@ -182,11 +178,6 @@ func _on_fullscreen_toggled(pressed: bool) -> void:
 	if _populating:
 		return
 	SettingsManager.set_fullscreen(pressed)
-
-
-func _on_restart_required(_key: String) -> void:
-	_restart_notice.text = "Restart required for display changes to take effect."
-	_restart_notice.visible = true
 
 
 ## --- Back seam --------------------------------------------------------------

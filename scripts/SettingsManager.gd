@@ -78,6 +78,11 @@ var _chunk_config: ChunkConfig = ChunkConfig.new()
 var _mods: Dictionary = {}
 var _last_error: String = ""
 
+## OS window mode observed immediately before fullscreen was enabled. On Windows
+## with Godot 4.2, a direct WINDOW_MODE_WINDOWED request is dropped when the
+## window entered fullscreen from MAXIMIZED, so that case restores MAXIMIZED.
+var _pre_fullscreen_mode: int = DisplayServer.WINDOW_MODE_WINDOWED
+
 
 func _ready() -> void:
 	reload()
@@ -213,6 +218,10 @@ func set_resolution_preset(index: int) -> bool:
 
 ## Toggle fullscreen and raise the restart notice. Returns false on a failed save.
 func set_fullscreen(value: bool) -> bool:
+	# Capture the live OS mode on the false -> true transition so exit can restore
+	# it. Headless DisplayServer has no real window to observe.
+	if value and not _fullscreen and DisplayServer.get_name() != "headless":
+		_pre_fullscreen_mode = DisplayServer.window_get_mode()
 	_fullscreen = value
 	var saved: bool = _write(SECTION_DISPLAY, "fullscreen", _fullscreen, "display")
 	_apply_display()
@@ -486,14 +495,29 @@ func _apply_volume() -> void:
 		AudioManager.set_master_volume(_master_volume)
 
 
+## Window mode requested when fullscreen is off (pure seam for headless tests).
+func get_window_mode_for_restore() -> int:
+	if _pre_fullscreen_mode == DisplayServer.WINDOW_MODE_MAXIMIZED:
+		return DisplayServer.WINDOW_MODE_MAXIMIZED
+	return DisplayServer.WINDOW_MODE_WINDOWED
+
+
+## Headless test seam for the restore-mode decision; production captures the
+## live window mode in set_fullscreen(true) instead.
+func set_pre_fullscreen_mode(mode: int) -> void:
+	_pre_fullscreen_mode = mode
+
+
 func _apply_display() -> void:
 	# Headless DisplayServer has no window; storage still round-trips for tests.
 	if DisplayServer.get_name() == "headless":
 		return
-	var mode: int = DisplayServer.WINDOW_MODE_FULLSCREEN if _fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
+	var mode: int = DisplayServer.WINDOW_MODE_FULLSCREEN if _fullscreen else get_window_mode_for_restore()
 	DisplayServer.window_set_mode(mode)
 	if not _fullscreen:
-		DisplayServer.window_set_size(Vector2i(_resolution_width, _resolution_height))
+		if mode == DisplayServer.WINDOW_MODE_WINDOWED:
+			DisplayServer.window_set_size(Vector2i(_resolution_width, _resolution_height))
+		_pre_fullscreen_mode = DisplayServer.WINDOW_MODE_WINDOWED
 
 
 func _apply_chunk_config() -> void:

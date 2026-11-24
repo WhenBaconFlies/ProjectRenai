@@ -3,8 +3,8 @@
 ## Persistent headless acceptance harness for ticket 030. Boots the real
 ## Options scene, drives its controls at their public seams and asserts external
 ## behaviour only: initial values come from SettingsManager, volume/chunk writes
-## apply immediately with no restart notice, resolution/fullscreen writes apply
-## and raise the restart notice, English is shown in a disabled selector, no
+## apply immediately, resolution/fullscreen writes apply immediately (no restart
+## notice is shown), English is shown in a disabled selector, no
 ## relationship-feedback toggle exists, values persist through reload, and both
 ## Back routes work (injected + default Main Menu). Config writes go to a
 ## dedicated user:// fixture so the developer's real settings.cfg is untouched.
@@ -13,7 +13,7 @@ extends Node
 
 const TEST_CONFIG_PATH: String = "user://options_test.cfg"
 const OPTIONS_SCENE: String = "res://scenes/Options.tscn"
-const EXPECTED_CHECKS: int = 21
+const EXPECTED_CHECKS: int = 23
 
 var _passed: int = 0
 var _failed: int = 0
@@ -78,7 +78,6 @@ func _run() -> void:
 		"SettingsScroll/SettingsBox/ResolutionRow/ResolutionOption",
 		"SettingsScroll/SettingsBox/FullscreenRow/FullscreenCheck",
 		"SettingsScroll/SettingsBox/LanguageRow/LanguageOption",
-		"RestartNotice",
 		"BackButton",
 	]
 	var structure_ok: bool = true
@@ -142,8 +141,8 @@ func _run() -> void:
 		and is_equal_approx(near_radius.value, 10.0)
 		and is_equal_approx(near_radius.min_value, 10.0),
 		"T7b: raising close radius clamps near to the effective value")
-	_check(_restarts.is_empty() and not _is_visible("RestartNotice"),
-		"T8: volume/chunk writes need no restart notice")
+	_check(_restarts.is_empty(),
+		"T8: volume/chunk writes raise no restart signal")
 
 	# --- Resolution / fullscreen: presets + restart notice --------------------
 	var resolution_option := _node("SettingsScroll/SettingsBox/ResolutionRow/ResolutionOption") as OptionButton
@@ -157,14 +156,28 @@ func _run() -> void:
 		resolution_option.select(2)
 		resolution_option.item_selected.emit(2)
 	_check(SettingsManager.get_resolution() == Vector2i(1920, 1080)
-		and _restarts.has("display") and _is_visible("RestartNotice"),
-		"T10: a preset applies through SettingsManager and shows the restart notice")
+		and _restarts.has("display") and _node("RestartNotice") == null,
+		"T10: a preset applies immediately through SettingsManager with no notice UI")
 	var fullscreen_check := _node("SettingsScroll/SettingsBox/FullscreenRow/FullscreenCheck") as CheckButton
 	if fullscreen_check != null:
 		fullscreen_check.button_pressed = true
-	_check(SettingsManager.get_fullscreen() and _restarts.size() >= 2
-		and _is_visible("RestartNotice"),
-		"T11: fullscreen applies through SettingsManager and shows the restart notice")
+	_check(SettingsManager.get_fullscreen() and _restarts.size() >= 2,
+		"T11: fullscreen applies immediately through SettingsManager")
+	if fullscreen_check != null:
+		fullscreen_check.button_pressed = false
+	_check(not SettingsManager.get_fullscreen(),
+		"T11b: toggling fullscreen off restores the stored windowed state")
+	# Windows/Godot drops a direct WINDOWED request when fullscreen was entered
+	# from MAXIMIZED; the restore-mode decision is pure and testable headlessly.
+	SettingsManager.set_pre_fullscreen_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
+	var maximized_restore: int = SettingsManager.get_window_mode_for_restore()
+	SettingsManager.set_pre_fullscreen_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	_check(maximized_restore == DisplayServer.WINDOW_MODE_MAXIMIZED
+		and SettingsManager.get_window_mode_for_restore() == DisplayServer.WINDOW_MODE_WINDOWED,
+		"T11c: leaving fullscreen restores MAXIMIZED when entered from it, else WINDOWED")
+	# Restore the ON state so the persistence check below still verifies fullscreen.
+	if fullscreen_check != null:
+		fullscreen_check.button_pressed = true
 
 	# --- Language display -----------------------------------------------------
 	var language_option := _node("SettingsScroll/SettingsBox/LanguageRow/LanguageOption") as OptionButton
@@ -229,11 +242,6 @@ func _run() -> void:
 
 func _node(path: String) -> Node:
 	return _options.get_node_or_null(path) if _options != null else null
-
-
-func _is_visible(path: String) -> bool:
-	var node := _node(path) as CanvasItem
-	return node != null and node.visible
 
 
 func _collect_nodes(node: Node, result: Array) -> void:
