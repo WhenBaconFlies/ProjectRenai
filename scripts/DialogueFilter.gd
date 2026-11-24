@@ -102,6 +102,12 @@ static func _meter(initiator: NpcInstance, target_id: String) -> Dictionary:
 	return raw if raw is Dictionary else {}
 
 
+## Public read-only access to a template's trait ids/tags. Ticket 015's resolver
+## uses the same key set when matching recipient trait modifiers.
+static func trait_keys(template: CharacterTemplate) -> Array[String]:
+	return _trait_keys(template)
+
+
 ## Every trait id and tag from both the `Trait` resources and plain-string
 ## entries of a template's `traits` array. Missing templates yield no keys.
 static func _trait_keys(template: CharacterTemplate) -> Array[String]:

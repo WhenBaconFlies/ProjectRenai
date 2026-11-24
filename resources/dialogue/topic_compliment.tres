@@ -21,3 +21,9 @@ mood_delta_success = 3
 affection_delta_failure = -2
 familiarity_delta_failure = 1
 mood_delta_failure = -3
+recipient_modifiers = [{
+"id": "trait:outgoing",
+"kind": "trait",
+"difficulty": 1,
+"delta_scale": 1.2
+}]
