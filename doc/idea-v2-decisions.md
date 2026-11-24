@@ -66,6 +66,12 @@ Source context: `doc/idea-v0.md` (original concept), `doc/idea-v1-final.md` (v1 
 - **User stories depth:** extensive — 42 stories covering conversations, overlay, content, menus, settings, saves, mods, NPC goals, verification.
 - **Builder details:** exact resolution presets, trait names/costs, schema defaults, Conversation method signatures, menu styling, and test counts remain builder choices; spec states the contracts only.
 
+## to-tickets decisions (v2)
+- **Ticket files:** stored in `doc/tickets/`, named `<NN>-<short-description>.md`, continuing numbering from v1 (021–033).
+- **Ticket count:** 13 tickets after merging the proposed traits/content and bulk-content tickets into one (022), per user request.
+- **Granularity/blocking edges:** user-approved as proposed; each ticket depends only on genuine gates. SettingsManager (025) has no blockers; relationship goals (032) gated only by content (022); integration harness (033) gated by all six feature tickets.
+- **GitHub issues:** 13 issues created (#23–#35) as sub-issues of spec #22 with `ready-for-agent` labels and native blocked-by edges. Mapping: 021→#23, 022→#25, 023→#28, 024→#29, 025→#24, 026→#30, 027→#31, 028→#33, 029→#26, 030→#27, 031→#34, 032→#32, 033→#35.
+
 ## Deferred unknowns (left to builder/plan)
 
 - Exact schema fields/defaults for greetings and responses (esp. greeting weight and response roll-field defaults).
