@@ -21,6 +21,10 @@
 ## Ticket 017 adds save/load: this script supplies a state provider to
 ## SaveManager, restores player/NPC instances and the day snapshot when
 ## GameManager.current_save is set, and handles the F5/F9 debug hotkeys.
+## Ticket 024 replaces the one-pick DialoguePoolUI with a ConversationUI overlay
+## driven by the pure Conversation helper: this script owns one session at a
+## time, maps numbered UI choices to conversation steps, locks input for the
+## whole exchange, and gates NPC initiation behind an injectable Callable.
 extends Node2D
 
 ## Emitted when the player picks a topic. Intentionally carries ids rather than
@@ -74,12 +78,33 @@ var _spawner: NpcSpawner = null
 var _player_instance: NpcInstance = null
 var _player_template: CharacterTemplate = null
 
-## Conversation wiring. Only one conversation can be open at a time.
+## Conversation wiring (ticket 024). Only one conversation can be open at a time.
 var _interaction: InteractionComponent = null
-var _dialogue_ui: DialoguePoolUI = null
+var _conversation_ui: ConversationUI = null
 var _feedback_ui: InteractionFeedbackUI = null
 var _dialogue_target: Npc = null
 var _dialogue_open: bool = false
+
+## The pure session owned for the duration of one conversation, plus the authored
+## resource arrays and the typed action mapped to each numbered UI choice.
+var _conversation: Conversation = null
+var _conversation_seq: int = 0
+var _conversation_npc_id: String = ""
+var _conversation_npc: Npc = null
+var _topics_for_conversation: Array = []
+var _greetings_for_conversation: Array = []
+var _responses_for_conversation: Array = []
+## Only line-only responses may be chosen as the NPC's spoken reaction in a
+## player-initiated talk; rollable replies belong to the NPC-initiated pool.
+var _reactions_for_conversation: Array = []
+var _conversation_actions: Array = []
+## Ids whose busy flags belong to the open conversation and survive a phase change.
+var _conversation_locked_ids: Array = []
+
+## NPC-initiation gate. A zero-arg Callable returning bool; tests and future cases
+## (e.g. "both skipping class") can inject another condition. Invalid callables
+## fall back to the free-time default in _ensure_npc_gate().
+var npc_initiation_gate: Callable = Callable()
 
 ## Guards the per-frame "free time nearly over" check to one departure per phase.
 var _class_travel_issued: bool = false
@@ -127,10 +152,10 @@ func _ready() -> void:
 	_setup_dialogue()
 	_setup_feedback()
 	_setup_chunk_manager()
-	# 014 emits the selection before closing the conversation; resolving here
-	# keeps the pure resolver out of the UI scripts and the scene tree entirely.
-	if not dialogue_topic_selected.is_connected(_on_dialogue_topic_selected):
-		dialogue_topic_selected.connect(_on_dialogue_topic_selected)
+	_ensure_npc_gate()
+	# Ticket 024: Conversation.choose_topic()/choose_reply() are the only resolvers.
+	# dialogue_topic_selected is still emitted for v1 observers, but no longer
+	# triggers a second roll here.
 	_time_connect()
 	if loaded_save != null:
 		_restore_from_save(loaded_save)
@@ -362,6 +387,9 @@ func sync_ai_state(preserve_saved_goals: bool = false) -> void:
 ## Debug hotkeys (menus are deferred in v1). F5 writes the reserved manual slot;
 ## F9 loads the most recently written compatible slot.
 func _unhandled_input(event: InputEvent) -> void:
+	# The conversation owns input (including Esc) until it closes.
+	if _dialogue_open:
+		return
 	if InputMap.has_action("manual_save") and event.is_action_pressed("manual_save"):
 		if SaveManager.save_slot(SaveManager.MANUAL_SLOT, {}, true):
 			print("[Game] manual save complete")
@@ -371,11 +399,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		GameManager.load_last_slot()
 
 
-## Connect the proximity trigger and the pool UI. Missing nodes are a soft
-## warning so older/stripped scenes still run (there is simply no dialogue).
+## Connect the proximity trigger and the conversation overlay. Missing nodes are
+## a soft warning so stripped scenes still run (there is simply no dialogue).
 func _setup_dialogue() -> void:
 	_interaction = get_node_or_null("Player/InteractionComponent") as InteractionComponent
-	_dialogue_ui = get_node_or_null("DialogueLayer/DialoguePoolUI") as DialoguePoolUI
+	_conversation_ui = get_node_or_null("DialogueLayer/ConversationUI") as ConversationUI
 
 	if _interaction != null:
 		if not _interaction.interaction_requested.is_connected(_on_interaction_requested):
@@ -383,13 +411,119 @@ func _setup_dialogue() -> void:
 	else:
 		push_warning("Game: no InteractionComponent under Player; dialogue trigger disabled")
 
-	if _dialogue_ui != null:
-		if not _dialogue_ui.topic_selected.is_connected(_on_topic_selected):
-			_dialogue_ui.topic_selected.connect(_on_topic_selected)
-		if not _dialogue_ui.cancelled.is_connected(_on_conversation_cancelled):
-			_dialogue_ui.cancelled.connect(_on_conversation_cancelled)
+	if _conversation_ui != null:
+		if not _conversation_ui.choice_selected.is_connected(_on_conversation_choice):
+			_conversation_ui.choice_selected.connect(_on_conversation_choice)
+		if not _conversation_ui.cancelled.is_connected(_on_conversation_cancelled):
+			_conversation_ui.cancelled.connect(_on_conversation_cancelled)
 	else:
-		push_warning("Game: no DialoguePoolUI under DialogueLayer; dialogue pool disabled")
+		push_warning("Game: no ConversationUI under DialogueLayer; conversations disabled")
+
+
+## Public seam for ticket 028's pause gate: the conversation owns Escape while
+## it is open, so the pause menu may only open when this returns false.
+func is_conversation_open() -> bool:
+	return _dialogue_open
+
+
+## Install the default free-time gate unless a caller injected one.
+func _ensure_npc_gate() -> void:
+	if not npc_initiation_gate.is_valid():
+		npc_initiation_gate = Callable(self, "_default_npc_initiation_gate")
+
+
+func set_npc_initiation_gate(gate: Callable) -> void:
+	npc_initiation_gate = gate if gate.is_valid() else Callable(self, "_default_npc_initiation_gate")
+
+
+## Default condition: free time only (ticket 024). Kept behind a Callable so the
+## rule can be replaced without editing Game.gd's update loop.
+func _default_npc_initiation_gate() -> bool:
+	return TimeManager.is_free_time_state(TimeManager.get_state())
+
+
+func _npc_gate_open() -> bool:
+	_ensure_npc_gate()
+	return bool(npc_initiation_gate.call())
+
+
+## Authored content for one conversation, read from the ModLoader registry.
+func _dialogue_resources() -> Dictionary:
+	var loader: Node = NpcInstance._mod_loader()
+	var topics: Array = []
+	var greetings: Array = []
+	var responses: Array = []
+	if loader != null:
+		topics = loader.call("get_all", str(loader.get("TYPE_DIALOGUE"))) as Array
+		greetings = loader.call("get_all", str(loader.get("TYPE_GREETING"))) as Array
+		responses = loader.call("get_all", str(loader.get("TYPE_RESPONSE"))) as Array
+	return {"topics": topics, "greetings": greetings, "responses": responses}
+
+
+## One seed per conversation, derived from the clock and the conversation target.
+func _next_conversation_seed(party_id: String) -> int:
+	_conversation_seq += 1
+	return (
+		TimeManager.get_day_number() * 104729 + _conversation_seq * 7919 + party_id.hash()
+	) & 0x7FFFFFFFFFFFFFFF
+
+
+## Render one line and remember the typed action behind each numbered choice.
+func _show_line(
+	speaker: String, line: String, labels: Array, actions: Array, listener: String = ""
+) -> void:
+	_conversation_actions = actions.duplicate()
+	if _conversation_ui != null:
+		_conversation_ui.show_line(speaker, line, labels, listener)
+
+
+## Forward a resolver payload to the existing feedback panel using the session's
+## initiator/target ids (the roll direction flips for NPC-initiated replies).
+func _show_conversation_feedback(result: Dictionary) -> void:
+	if result.is_empty() or not show_relationship_feedback or _feedback_ui == null:
+		return
+	if _conversation == null:
+		return
+	_feedback_ui.show_result(
+		result,
+		_name_for_id(_conversation.get_initiator_id()),
+		_name_for_id(_conversation.get_target_id())
+	)
+
+
+func _name_for_id(id: String) -> String:
+	if id == _player_id():
+		return "You"
+	var instance: NpcInstance = _instances_by_id.get(id) as NpcInstance
+	if instance != null and not instance.display_name.is_empty():
+		return instance.display_name
+	return id
+
+
+func _npc_name() -> String:
+	return _name_for_id(_conversation_npc_id)
+
+
+## Map a numbered overlay choice to the current conversation step.
+func _on_conversation_choice(index: int) -> void:
+	if not _dialogue_open or _conversation == null:
+		return
+	if index < 0 or index >= _conversation_actions.size():
+		return
+	var action: Dictionary = _conversation_actions[index]
+	match str(action.get("kind", "")):
+		"topics":
+			present_topic_pool()
+		"topic":
+			_resolve_topic(action.get("topic") as DialogueTopic)
+		"replies":
+			present_reply_pool()
+		"reply":
+			_resolve_reply(action.get("reply") as DialogueResponse)
+		"leave":
+			_close_conversation()
+		_:
+			push_warning("Game: unknown conversation action '%s'" % str(action.get("kind", "")))
 
 
 ## Locate the optional feedback panel. A stripped scene simply has no feedback.
@@ -410,12 +544,12 @@ func is_relationship_feedback_enabled() -> bool:
 	return show_relationship_feedback
 
 
-## Open the pool for the nearest NPC in range. E works at any time of day
-## (user decision); only proximity and an already-open conversation gate it.
+## Open a player-initiated conversation with the nearest NPC in range. E works
+## at any time of day (user decision); proximity and an open conversation gate it.
 func _on_interaction_requested(target: Npc) -> void:
 	if _dialogue_open or _player_instance == null:
 		return
-	if _interaction == null or _dialogue_ui == null:
+	if _interaction == null or _conversation_ui == null:
 		return
 	if target == null or not is_instance_valid(target) or target.instance == null:
 		return
@@ -432,81 +566,136 @@ func _on_interaction_requested(target: Npc) -> void:
 		if not ChunkManager.promote_for_interaction(target):
 			return
 
-	var topics: Array = []
-	var loader: Node = NpcInstance._mod_loader()
-	if loader != null:
-		var bucket: Variant = loader.get("TYPE_DIALOGUE")
-		var bucket_name: String = str(bucket) if bucket != null else "dialogue"
-		topics = loader.call("get_all", bucket_name) as Array
+	var resources: Dictionary = _dialogue_resources()
+	_conversation = Conversation.new()
+	_conversation.begin_player_initiated(
+		_player_instance, target.instance, _player_template,
+		target.instance.resolve_template(),
+		_next_conversation_seed(target.instance.instance_id),
+		TimeManager.get_state_name()
+	)
+	_topics_for_conversation = resources.get("topics", [])
+	_greetings_for_conversation = resources.get("greetings", [])
+	_responses_for_conversation = resources.get("responses", [])
+	_index_conversation_responses(_responses_for_conversation)
+	_conversation_npc_id = target.instance.instance_id
+	_conversation_npc = target
+	_dialogue_target = target
+	_dialogue_open = true
+	_lock_conversation_parties(target)
 
-	var pool: Array = DialogueFilter.build_pool(
-		topics,
-		_player_instance,
-		target.instance,
-		_player_template,
-		target.instance.resolve_template()
+	var opening: Dictionary = _conversation.choose_greeting(_greetings_for_conversation)
+	_show_line(
+		_npc_name(), str(opening.get("text", "")), ["Continue"],
+		[{"kind": "topics"}], "You"
 	)
 
-	_dialogue_open = true
-	_dialogue_target = target
-	_interaction.set_enabled(false)
+
+## Lock player input and the NPC party for the whole conversation. Releases happen
+## only in _close_conversation(), never after a single pick.
+func _lock_conversation_parties(npc: Npc, npc_id: String = "") -> void:
+	var locked_id: String = npc_id if not npc_id.is_empty() else (
+		npc.instance.instance_id if npc != null and npc.instance != null else ""
+	)
+	_conversation_locked_ids = [locked_id, _player_id()]
+	_lock_initiation_party(locked_id, npc)
+	_initiation_busy[_player_id()] = true
+	if _interaction != null:
+		_interaction.set_enabled(false)
 	var player := get_node_or_null("Player") as Player
 	if player != null:
 		player.set_input_locked(true)
-	target.set_conversation_busy(true)
-
-	if pool.is_empty():
-		_dialogue_ui.show_empty(_player_instance.instance_id, target.instance.instance_id)
-	else:
-		_dialogue_ui.show_pool(pool, _player_instance.instance_id, target.instance.instance_id)
 
 
-## Selection ends the interaction. Resolution is a separate listener on the
-## signal; nothing is rolled or written here.
-func _on_topic_selected(topic: DialogueTopic, initiator_id: String, target_id: String) -> void:
-	if not _dialogue_open:
+## Show the filtered 3-5 topic pool for the next player pick.
+func present_topic_pool() -> void:
+	if _conversation == null or not _dialogue_open:
 		return
-	# Emit while the player and target are still locked: the resolver runs from
-	# this signal and must see the interaction as still in progress.
-	dialogue_topic_selected.emit(topic, initiator_id, target_id)
-	_close_conversation()
+	var pool: Array = _conversation.build_topic_pool(_topics_for_conversation)
+	var labels: Array = []
+	var actions: Array = []
+	for item in pool:
+		var topic: DialogueTopic = item as DialogueTopic
+		if topic == null:
+			continue
+		labels.append(topic.text)
+		actions.append({"kind": "topic", "topic": topic})
+	if labels.is_empty():
+		labels.append("There is nothing to talk about right now.")
+		actions.append({"kind": "leave"})
+	_show_line("You", "Choose a topic:", labels, actions, _npc_name())
 
 
-## Ticket 015: resolve the selected topic for both parties and show feedback.
-## Instances are looked up by id (014 registered the player too) so an NPC can
-## later be the initiator without changing this seam.
-func _on_dialogue_topic_selected(
-	topic: DialogueTopic, initiator_id: String, target_id: String
-) -> void:
-	var initiator: NpcInstance = _instances_by_id.get(initiator_id) as NpcInstance
-	var target: NpcInstance = _instances_by_id.get(target_id) as NpcInstance
-	if initiator == null or target == null:
-		var topic_label: String = topic.id if topic != null else "<null>"
-		push_warning("Game: cannot resolve '%s' — unknown initiator/target id" % topic_label)
+## Resolve one player topic, show the reactive NPC line, then either offer the
+## second exchange or leave. The 023 helper performs the only roll here.
+## Split the authored response registry into spoken reactions (line-only) and
+## reply options (rollable). Keeps the 023 fallback chain intact while preventing
+## a reply's roll fields from firing during a player-initiated reaction.
+func _index_conversation_responses(responses: Array) -> void:
+	_responses_for_conversation = responses.duplicate()
+	_reactions_for_conversation = []
+	for item in responses:
+		var response: DialogueResponse = item as DialogueResponse
+		if response != null and response.is_line_only():
+			_reactions_for_conversation.append(response)
+
+
+func _resolve_topic(topic: DialogueTopic) -> void:
+	if topic == null or _conversation == null:
 		return
+	var result: Dictionary = _conversation.choose_topic(topic)
+	if result.is_empty():
+		return
+	dialogue_topic_selected.emit(topic, _player_id(), _conversation_npc_id)
+	dialogue_resolved.emit(result)
+	_show_conversation_feedback(result)
 
-	var result: Dictionary = DialogueResolver.resolve(
-		topic,
-		initiator,
-		target,
-		_template_for(initiator, initiator_id),
-		_template_for(target, target_id)
+	var reaction: Dictionary = _conversation.select_response(
+		_reactions_for_conversation, _topics_for_conversation
 	)
+	_show_conversation_feedback(reaction)
+	var line: String = str(reaction.get("response_text", reaction.get("topic_text", "")))
+	if line.is_empty():
+		line = "..."
+	var labels: Array = ["Continue"]
+	var actions: Array = [{"kind": "topics"}]
+	if not _conversation.can_pick_topic():
+		labels = ["Leave"]
+		actions = [{"kind": "leave"}]
+	_show_line(_npc_name(), line, labels, actions, "You")
+
+
+## Show the fixed 2-3 filtered replies for an NPC-initiated talk. The response
+## text is the player's spoken line in this shape.
+func present_reply_pool() -> void:
+	if _conversation == null or not _dialogue_open:
+		return
+	var pool: Array = _conversation.build_reply_pool(_responses_for_conversation)
+	var labels: Array = []
+	var actions: Array = []
+	for item in pool:
+		var reply: DialogueResponse = item as DialogueResponse
+		if reply == null:
+			continue
+		labels.append(reply.text)
+		actions.append({"kind": "reply", "reply": reply})
+	if labels.is_empty():
+		labels.append("I'm not sure what to say about that.")
+		actions.append({"kind": "leave"})
+	_show_line("You", "Choose your reply:", labels, actions, _npc_name())
+
+
+## Resolve the player's reply (player is the roll initiator) and end the talk after
+## its spoken line is acknowledged.
+func _resolve_reply(reply: DialogueResponse) -> void:
+	if reply == null or _conversation == null:
+		return
+	var result: Dictionary = _conversation.choose_reply(reply, _topics_for_conversation)
 	if result.is_empty():
 		return
 	dialogue_resolved.emit(result)
-
-	# NPC↔NPC outcomes still resolve and emit `dialogue_resolved`, but the panel is
-	# a player-facing HUD: showing it for conversations the player is not part of
-	# would replace the player's own feedback. Player-involving results are queued
-	# by InteractionFeedbackUI so concurrent ones display one after another.
-	var involves_player: bool = initiator_id == _player_id() or target_id == _player_id()
-	if show_relationship_feedback and involves_player and _feedback_ui != null:
-		_feedback_ui.show_result(
-			result,
-			_display_name_for(initiator, initiator_id),
-			_display_name_for(target, target_id)
-		)
+	_show_conversation_feedback(result)
+	_show_line("You", reply.text, ["Leave"], [{"kind": "leave"}], _npc_name())
 
 
 ## The player's template is cached at setup; NPC instances resolve theirs from
@@ -518,27 +707,34 @@ func _template_for(instance: NpcInstance, id: String) -> CharacterTemplate:
 
 
 func _display_name_for(instance: NpcInstance, id: String) -> String:
-	if id == _player_id():
-		return "You"
-	if instance != null and not instance.display_name.is_empty():
-		return instance.display_name
-	return id
+	return _name_for_id(id)
 
 
-## Cancel (or dismissing the empty fallback) ends the interaction with no pick.
+## Esc ends the conversation with no further pick.
 func _on_conversation_cancelled() -> void:
 	_close_conversation()
 
 
+## Single close path: hide the overlay, end the helper session and release every
+## lock acquired when the conversation opened.
 func _close_conversation() -> void:
-	if _dialogue_ui != null:
-		_dialogue_ui.hide_pool()
+	if _conversation != null:
+		_conversation.leave()
+	if _conversation_ui != null:
+		_conversation_ui.hide_panel()
 	var player := get_node_or_null("Player") as Player
 	if player != null:
 		player.set_input_locked(false)
 	if is_instance_valid(_dialogue_target):
 		_dialogue_target.set_conversation_busy(false)
+	for id in _conversation_locked_ids:
+		_release_initiation_party(str(id))
+	_conversation_locked_ids.clear()
+	_conversation_actions.clear()
+	_conversation = null
 	_dialogue_target = null
+	_conversation_npc = null
+	_conversation_npc_id = ""
 	_dialogue_open = false
 	if _interaction != null:
 		_interaction.set_enabled(true)
@@ -640,6 +836,11 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 	var target_instance: NpcInstance = _instances_by_id.get(target_id) as NpcInstance
 	if target_instance == null:
 		return
+	# Ticket 024: only an NPC→player initiation uses the overlay and the reply
+	# shape. NPC↔NPC keeps v1's immediate resolution (no player can answer).
+	if target_id == _player_id():
+		_begin_npc_conversation(initiator, initiator_id, seed_value)
+		return
 
 	var pool: Array = DialogueFilter.build_pool(
 		topics,
@@ -665,9 +866,47 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 	_initiation_cooldowns[initiator_id] = npc_initiation_cooldown_sec
 
 	npc_interaction_started.emit(topic.id, initiator_id, target_id)
-	# Same seam as the player path: 015 resolves and shows feedback. Emit while
-	# both parties are still locked, mirroring `_on_topic_selected()`.
+	# NPC↔NPC has no player to answer, so it resolves immediately here. The
+	# feedback panel is player-facing and is deliberately not shown for this pair.
+	var result: Dictionary = DialogueResolver.resolve(
+		topic, initiator_instance, target_instance, initiator_template,
+		_template_for(target_instance, target_id),
+		(seed_value + target_id.hash() * 31) & 0x7FFFFFFFFFFFFFFF
+	)
 	dialogue_topic_selected.emit(topic, initiator_id, target_id)
+	if not result.is_empty():
+		dialogue_resolved.emit(result)
+
+
+## Open the NPC-initiated reply flow with the player as the target. The opening
+## topic is spoken only (no roll/deltas); the player's reply is the final change.
+func _begin_npc_conversation(initiator: Npc, initiator_id: String, seed_value: int) -> void:
+	if _dialogue_open or _conversation_ui == null or initiator.instance == null:
+		return
+	var resources: Dictionary = _dialogue_resources()
+	_conversation = Conversation.new()
+	_conversation.begin_npc_initiated(
+		initiator.instance, _player_instance,
+		initiator.instance.resolve_template(), _player_template,
+		_next_conversation_seed(initiator_id), TimeManager.get_state_name()
+	)
+	_topics_for_conversation = resources.get("topics", [])
+	_greetings_for_conversation = resources.get("greetings", [])
+	_responses_for_conversation = resources.get("responses", [])
+	_index_conversation_responses(_responses_for_conversation)
+	_conversation_npc_id = initiator_id
+	_conversation_npc = initiator
+	_dialogue_target = null
+	_dialogue_open = true
+	_lock_conversation_parties(initiator, initiator_id)
+	_initiation_cooldowns[initiator_id] = npc_initiation_cooldown_sec
+
+	var opening: Dictionary = _conversation.choose_opening_topic(_topics_for_conversation)
+	npc_interaction_started.emit(str(opening.get("id", "")), initiator_id, _player_id())
+	_show_line(
+		_npc_name(), str(opening.get("text", "")), ["Continue"],
+		[{"kind": "replies"}], "You"
+	)
 
 
 ## Player position for proximity weighting. The player instance is not mirrored
@@ -727,7 +966,12 @@ func _clear_active_initiations() -> void:
 		_release_initiation_party(str(entry.get("initiator_id", "")))
 		_release_initiation_party(str(entry.get("target_id", "")))
 	_active_initiations.clear()
-	_initiation_busy.clear()
+	# A phase change must not silently unlock an open conversation's parties;
+	# those flags are released only by _close_conversation().
+	for id in _initiation_busy.keys():
+		if _dialogue_open and _conversation_locked_ids.has(str(id)):
+			continue
+		_release_initiation_party(str(id))
 	_initiation_elapsed = 0.0
 
 
@@ -774,7 +1018,7 @@ func _process(delta: float) -> void:
 		npc_initiation_enabled
 		and not _dialogue_open
 		and not TimeManager.is_skipping()
-		and _is_free_time_state(state)
+		and _npc_gate_open()
 	):
 		_initiation_elapsed += delta
 		if _initiation_elapsed >= maxf(0.1, npc_initiation_check_interval_sec):

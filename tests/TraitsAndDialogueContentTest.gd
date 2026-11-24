@@ -19,7 +19,9 @@ const RESPONSES_DIR: String = "res://resources/dialogue/responses/"
 const EXPECTED_TRAITS: int = 24
 const EXPECTED_GREETINGS: int = 12
 const EXPECTED_TOPICS: int = 16
-const EXPECTED_RESPONSES: int = 27
+## 27 from ticket 022 + 5 extra rollable replies authored in ticket 024 so the
+## NPC-initiated reply pool can offer 2-3 options per topic.
+const EXPECTED_RESPONSES: int = 32
 const EXPECTED_CHECKS: int = 23
 
 const STATS: Array[String] = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
@@ -43,7 +45,7 @@ func _run() -> void:
 	_check(_count_files(TRAITS_DIR) == EXPECTED_TRAITS, "T1: 24 authored trait .tres files")
 	_check(_count_files(GREETINGS_DIR) == EXPECTED_GREETINGS, "T2: 12 authored greeting .tres files")
 	_check(_count_files(TOPICS_DIR) == EXPECTED_TOPICS, "T3: 16 authored player-topic .tres files")
-	_check(_count_files(RESPONSES_DIR) == EXPECTED_RESPONSES, "T4: 27 authored response .tres files")
+	_check(_count_files(RESPONSES_DIR) == EXPECTED_RESPONSES, "T4: 32 authored response .tres files")
 	var dialogue_total: int = greetings.size() + topics.size() + responses.size()
 	_check(dialogue_total >= 40 and dialogue_total <= 60, "T5: %d dialogue resources are in the 40-60 range" % dialogue_total)
 

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="DialogueResponse" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueResponse.gd" id="1_response"]
+
+[resource]
+script = ExtResource("1_response")
+id = "response:ask_day_reply_calm"
+text = "Pretty quiet today, honestly. How about you?"
+topic_id = "topic:ask_day"
+outcomes = PackedStringArray()
+relationship_bands = PackedStringArray()
+checked_stat = "charisma"
+difficulty = 4
+affection_delta_success = 2
+familiarity_delta_success = 3
+mood_delta_success = 1
+affection_delta_failure = -1
+familiarity_delta_failure = 1
+mood_delta_failure = -1

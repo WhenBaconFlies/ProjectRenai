@@ -413,7 +413,7 @@ func _check_real_game() -> void:
 	_check(all_close, "18: shipped 1x1-chunk map keeps every NPC close")
 
 	var npcs_root: Node = game.get_node_or_null("Npcs")
-	var pool_ui: Node = game.get_node_or_null("DialogueLayer/DialoguePoolUI")
+	var pool_ui: Node = game.get_node_or_null("DialogueLayer/ConversationUI")
 	if npcs_root == null or npcs_root.get_child_count() == 0 or pool_ui == null:
 		_check(false, "8: real interaction guard (missing scene nodes)")
 		return

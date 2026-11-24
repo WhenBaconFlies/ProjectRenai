@@ -7,7 +7,7 @@
 [ext_resource type="Script" path="res://scripts/Minimap.gd" id="5_minimap"]
 [ext_resource type="Script" path="res://scripts/Game.gd" id="6_game"]
 [ext_resource type="Script" path="res://scripts/InteractionComponent.gd" id="7_interaction"]
-[ext_resource type="Script" path="res://scripts/DialoguePoolUI.gd" id="8_dialogue_ui"]
+[ext_resource type="Script" path="res://scripts/ConversationUI.gd" id="8_conversation_ui"]
 [ext_resource type="Script" path="res://scripts/InteractionFeedbackUI.gd" id="9_feedback"]
 [ext_resource type="Script" path="res://scripts/ChunkGridOverlay.gd" id="10_overlay"]
 
@@ -57,7 +57,7 @@ script = ExtResource("5_minimap")
 [node name="DialogueLayer" type="CanvasLayer" parent="."]
 layer = 2
 
-[node name="DialoguePoolUI" type="Control" parent="DialogueLayer"]
+[node name="ConversationUI" type="Control" parent="DialogueLayer"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -65,7 +65,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-script = ExtResource("8_dialogue_ui")
+script = ExtResource("8_conversation_ui")
 
 [node name="FeedbackLayer" type="CanvasLayer" parent="."]
 layer = 3
