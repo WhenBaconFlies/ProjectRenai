@@ -372,7 +372,11 @@ func _visible(node: Node, path: String) -> bool:
 func _embedded_back(embedded: Node) -> void:
 	if embedded == null:
 		return
+	# Placeholder screens (Load/Mods) keep Back in CenterBox; the real Options
+	# screen (ticket 030) owns it at the root.
 	var back: Button = embedded.get_node_or_null("CenterBox/BackButton") as Button
+	if back == null:
+		back = embedded.get_node_or_null("BackButton") as Button
 	if back != null:
 		back.pressed.emit()
 

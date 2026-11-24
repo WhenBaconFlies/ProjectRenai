@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/PlaceholderScreen.gd" id="1_placeholder"]
+[ext_resource type="Script" path="res://scripts/Options.gd" id="1_options"]
 
 [node name="Options" type="Control"]
 layout_mode = 3
@@ -9,8 +9,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_placeholder")
-screen_title = "Options"
+script = ExtResource("1_options")
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -22,34 +21,198 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(0.07, 0.09, 0.16, 1)
 
-[node name="CenterBox" type="VBoxContainer" parent="."]
+[node name="TitleLabel" type="Label" parent="."]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -170.0
-offset_top = -70.0
-offset_right = 170.0
-offset_bottom = 70.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 14
-
-[node name="TitleLabel" type="Label" parent="CenterBox"]
-layout_mode = 2
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 18.0
+offset_bottom = 58.0
 text = "Options"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 30
 
-[node name="NoteLabel" type="Label" parent="CenterBox"]
-layout_mode = 2
-text = "Options will be available in a later update."
-horizontal_alignment = 1
-theme_override_font_sizes/font_size = 14
+[node name="SettingsScroll" type="ScrollContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+offset_left = 40.0
+offset_top = 74.0
+offset_right = -40.0
+offset_bottom = -120.0
+horizontal_scroll_mode = 0
 
-[node name="BackButton" type="Button" parent="CenterBox"]
-custom_minimum_size = Vector2(240, 44)
+[node name="SettingsBox" type="VBoxContainer" parent="SettingsScroll"]
 layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="VolumeRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="VolumeLabel" type="Label" parent="SettingsScroll/SettingsBox/VolumeRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Volume"
+vertical_alignment = 1
+
+[node name="VolumeSlider" type="HSlider" parent="SettingsScroll/SettingsBox/VolumeRow"]
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+min_value = 0.0
+max_value = 100.0
+step = 1.0
+value = 80.0
+
+[node name="VolumeValueLabel" type="Label" parent="SettingsScroll/SettingsBox/VolumeRow"]
+custom_minimum_size = Vector2(54, 0)
+layout_mode = 2
+text = "80%"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="CloseRadiusRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CloseRadiusLabel" type="Label" parent="SettingsScroll/SettingsBox/CloseRadiusRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Close tier radius"
+vertical_alignment = 1
+
+[node name="CloseRadiusSpin" type="SpinBox" parent="SettingsScroll/SettingsBox/CloseRadiusRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 0.0
+max_value = 32.0
+step = 1.0
+rounded = true
+value = 2.0
+
+[node name="NearRadiusRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NearRadiusLabel" type="Label" parent="SettingsScroll/SettingsBox/NearRadiusRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Near tier radius"
+vertical_alignment = 1
+
+[node name="NearRadiusSpin" type="SpinBox" parent="SettingsScroll/SettingsBox/NearRadiusRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 64.0
+step = 1.0
+rounded = true
+value = 4.0
+
+[node name="CloseTickRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CloseTickLabel" type="Label" parent="SettingsScroll/SettingsBox/CloseTickRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Close tick (s)"
+vertical_alignment = 1
+
+[node name="CloseTickSpin" type="SpinBox" parent="SettingsScroll/SettingsBox/CloseTickRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 0.0
+max_value = 30.0
+step = 0.05
+value = 0.0
+
+[node name="NearTickRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NearTickLabel" type="Label" parent="SettingsScroll/SettingsBox/NearTickRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Near tick (s)"
+vertical_alignment = 1
+
+[node name="NearTickSpin" type="SpinBox" parent="SettingsScroll/SettingsBox/NearTickRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 0.0
+max_value = 30.0
+step = 0.05
+value = 0.25
+
+[node name="FarTickRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="FarTickLabel" type="Label" parent="SettingsScroll/SettingsBox/FarTickRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Far tick (s)"
+vertical_alignment = 1
+
+[node name="FarTickSpin" type="SpinBox" parent="SettingsScroll/SettingsBox/FarTickRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+min_value = 0.0
+max_value = 120.0
+step = 0.05
+value = 5.0
+
+[node name="ResolutionRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResolutionLabel" type="Label" parent="SettingsScroll/SettingsBox/ResolutionRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Resolution"
+vertical_alignment = 1
+
+[node name="ResolutionOption" type="OptionButton" parent="SettingsScroll/SettingsBox/ResolutionRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+
+[node name="FullscreenRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="FullscreenLabel" type="Label" parent="SettingsScroll/SettingsBox/FullscreenRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Fullscreen"
+vertical_alignment = 1
+
+[node name="FullscreenCheck" type="CheckButton" parent="SettingsScroll/SettingsBox/FullscreenRow"]
+layout_mode = 2
+
+[node name="LanguageRow" type="HBoxContainer" parent="SettingsScroll/SettingsBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LanguageLabel" type="Label" parent="SettingsScroll/SettingsBox/LanguageRow"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+text = "Language"
+vertical_alignment = 1
+
+[node name="LanguageOption" type="OptionButton" parent="SettingsScroll/SettingsBox/LanguageRow"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="."]
+custom_minimum_size = Vector2(200, 44)
+layout_mode = 1
+anchors_preset = 12
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -58.0
+offset_right = 100.0
+offset_bottom = -14.0
+grow_horizontal = 2
 text = "Back"

@@ -4,11 +4,11 @@
 
 **Blocked by:** 025 (SettingsManager + ConfigFile persistence)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] Volume control is present and applies immediately
-- [ ] Chunk settings expose tier radii and tick rates and apply immediately
-- [ ] Resolution offers windowed presets plus fullscreen and applies per the immediacy rule
-- [ ] Language row shows English as current with a disabled selector
-- [ ] The relationship-feedback toggle is not present
-- [ ] Settings persist across restart via `SettingsManager`
+- [x] Volume control is present and applies immediately
+- [x] Chunk settings expose tier radii and tick rates and apply immediately
+- [x] Resolution offers windowed presets plus fullscreen and applies per the immediacy rule
+- [x] Language row shows English as current with a disabled selector
+- [x] The relationship-feedback toggle is not present
+- [x] Settings persist across restart via `SettingsManager`
