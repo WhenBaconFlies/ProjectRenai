@@ -181,6 +181,13 @@ func is_busy() -> bool:
 	return _conversation_busy or (_ai_enabled and instance != null and not instance.current_goal.is_empty())
 
 
+## True while walking to a forced destination (class travel). Ticket 016 excludes
+## these NPCs from initiation: they are effectively busy with the schedule. Ordinary
+## hangout goals deliberately do NOT block initiation.
+func is_forced_destination() -> bool:
+	return _forced_destination
+
+
 ## Walk to an externally imposed destination (class travel). This bypasses
 ## NpcAi but reuses the same navigation agent, stall recovery and obstacle
 ## sliding; on arrival the body snaps exactly onto the destination.

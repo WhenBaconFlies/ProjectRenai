@@ -14,6 +14,10 @@
 ## pool, the pool UI shows it, and this script only wires the two together.
 ## Ticket 015 adds the resolver: this script still applies no deltas itself, it
 ## forwards the selection to `DialogueResolver` and shows optional feedback.
+## Ticket 016 adds NPC initiation: during free time an outgoing NPC may pick a
+## target (player or NPC), choose a random topic from the same filtered pool and
+## emit `dialogue_topic_selected` — so resolution, deltas and feedback are shared
+## with the player path and this script still applies no deltas itself.
 extends Node2D
 
 ## Emitted when the player picks a topic. Intentionally carries ids rather than
@@ -23,6 +27,11 @@ signal dialogue_topic_selected(topic: DialogueTopic, initiator_id: String, targe
 ## Emitted after a topic has been resolved, carrying the resolver's result
 ## Dictionary (roll breakdown, deltas, before/after meters and relationship).
 signal dialogue_resolved(result: Dictionary)
+
+## Emitted when an NPC starts an interaction on its own, before resolution.
+## Carries the topic id and both roster ids; observers can count initiations
+## without reaching into this script's bookkeeping.
+signal npc_interaction_started(topic_id: String, initiator_id: String, target_id: String)
 
 ## Roster id for the player. Mirrors TimeManager's exported default; the player
 ## instance shape arrives with the save/load ticket, so for now only the id and
@@ -39,9 +48,22 @@ const FALLBACK_PLAYER_ID: String = "player"
 ## is set_relationship_feedback_enabled() below.
 @export var show_relationship_feedback: bool = true
 
+## --- Ticket 016: NPC-initiated interaction tuning ---------------------------
+
+## Master switch. Verification can turn this off to isolate the player path.
+@export var npc_initiation_enabled: bool = true
+## How often free-time checks for a possible initiation run (seconds).
+@export var npc_initiation_check_interval_sec: float = 2.0
+## How long both parties stay busy/visible after an NPC-initiated interaction.
+@export var npc_initiation_hold_sec: float = 2.0
+## Per-initiator cooldown so one outgoing NPC cannot dominate a free-time phase.
+@export var npc_initiation_cooldown_sec: float = 8.0
+
 
 var _npcs: Array = []
 var _instances_by_id: Dictionary = {}
+## Stable instance id -> Npc node, for freezing/unfreezing conversation parties.
+var _npcs_by_id: Dictionary = {}
 var _map: Map = null
 var _spawner: NpcSpawner = null
 
@@ -61,6 +83,19 @@ var _class_travel_issued: bool = false
 ## Set by skip_simulation_requested; consumed on the next state_changed so a
 ## skipped class transition hard-snaps instead of simulating the walk.
 var _skip_pending: bool = false
+
+## --- Ticket 016 bookkeeping -------------------------------------------------
+
+## Seconds since the last initiation check and number of checks this day (seed).
+var _initiation_elapsed: float = 0.0
+var _initiation_attempts: int = 0
+## Ids currently locked by an NPC-initiated interaction (player id included).
+var _initiation_busy: Dictionary = {}
+## Initiator id -> remaining cooldown seconds.
+var _initiation_cooldowns: Dictionary = {}
+## Active holds: [{ initiator_id, target_id, remaining }]. Multiple are allowed;
+## participants are locked individually so the same character is never double-booked.
+var _active_initiations: Array = []
 
 
 func _ready() -> void:
@@ -95,10 +130,12 @@ func _setup_npcs() -> void:
 	_spawner = NpcSpawner.new()
 	_npcs = _spawner.spawn(npcs_root, _map, NpcSpawner.DEFAULT_TEMPLATE_IDS)
 	_instances_by_id.clear()
+	_npcs_by_id.clear()
 	for npc_variant in _npcs:
 		var npc: Npc = npc_variant as Npc
 		if npc != null and npc.instance != null:
 			_instances_by_id[npc.instance.instance_id] = npc.instance
+			_npcs_by_id[npc.instance.instance_id] = npc
 
 	# set_roster must receive stable instance ids (ticket 011 requirement), not
 	# template ids — otherwise multiple NPCs from one template would collapse
@@ -185,6 +222,10 @@ func _on_interaction_requested(target: Npc) -> void:
 		return
 	if target.is_conversation_busy():
 		return
+	# Ticket 016: the player must not open a second conversation with a character
+	# already locked by an NPC-initiated interaction.
+	if _initiation_busy.has(target.instance.instance_id):
+		return
 
 	var topics: Array = []
 	var loader: Node = NpcInstance._mod_loader()
@@ -250,7 +291,12 @@ func _on_dialogue_topic_selected(
 		return
 	dialogue_resolved.emit(result)
 
-	if show_relationship_feedback and _feedback_ui != null:
+	# NPC↔NPC outcomes still resolve and emit `dialogue_resolved`, but the panel is
+	# a player-facing HUD: showing it for conversations the player is not part of
+	# would replace the player's own feedback. Player-involving results are queued
+	# by InteractionFeedbackUI so concurrent ones display one after another.
+	var involves_player: bool = initiator_id == _player_id() or target_id == _player_id()
+	if show_relationship_feedback and involves_player and _feedback_ui != null:
 		_feedback_ui.show_result(
 			result,
 			_display_name_for(initiator, initiator_id),
@@ -293,12 +339,203 @@ func _close_conversation() -> void:
 		_interaction.set_enabled(true)
 
 
+## --- Ticket 016: NPC-initiated interactions --------------------------------
+
+## One periodic check. No global one-at-a-time lock: each eligible outgoing NPC
+## gets a chance, in seeded order, while a per-character busy set prevents any
+## participant from being claimed twice. A skipped initiator (no target/pool) leaves
+## no state behind, so an empty registry or missing topics never crashes the day.
+func _try_npc_initiations() -> void:
+	var topics: Array = []
+	var loader: Node = NpcInstance._mod_loader()
+	if loader != null:
+		var bucket: Variant = loader.get("TYPE_DIALOGUE")
+		var bucket_name: String = str(bucket) if bucket != null else "dialogue"
+		topics = loader.call("get_all", bucket_name) as Array
+	if topics.is_empty():
+		return
+
+	var initiator_ids: Array = []
+	for npc_variant in _npcs:
+		var candidate: Npc = npc_variant as Npc
+		if candidate == null or candidate.instance == null:
+			continue
+		var id: String = candidate.instance.instance_id
+		if _initiation_busy.has(id) or float(_initiation_cooldowns.get(id, 0.0)) > 0.0:
+			continue
+		if candidate.is_conversation_busy() or candidate.is_forced_destination():
+			continue
+		if not NpcInitiation.can_initiate(
+			candidate.instance, candidate.instance.resolve_template(), false, false
+		):
+			continue
+		initiator_ids.append(id)
+	if initiator_ids.is_empty():
+		return
+
+	_initiation_attempts += 1
+	var seed_value: int = (
+		TimeManager.get_day_number() * 104729 + _initiation_attempts * 7919
+	) & 0x7FFFFFFFFFFFFFFF
+	for initiator_id_variant in NpcInitiation.seeded_order(initiator_ids, seed_value):
+		var initiator_id: String = str(initiator_id_variant)
+		var initiator: Npc = _npcs_by_id.get(initiator_id) as Npc
+		if initiator == null or initiator.instance == null:
+			continue
+		# An earlier initiation in this same pass may have claimed this NPC.
+		if _initiation_busy.has(initiator_id) or initiator.is_conversation_busy():
+			continue
+		_try_one_initiation(initiator, initiator_id, topics, seed_value)
+
+
+## Attempt a single initiator→target interaction. All mutations are confined to
+## this method; the actual roll and deltas still happen in 015's resolver listener.
+func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, seed_value: int) -> void:
+	var initiator_instance: NpcInstance = initiator.instance
+	var initiator_template: CharacterTemplate = initiator_instance.resolve_template()
+	var initiator_position: Vector2 = initiator_instance.position
+
+	var target_candidates: Array = []
+	# The player is a valid target (unless the player's own pool is open).
+	if not _dialogue_open and _player_instance != null:
+		var player_id: String = _player_instance.instance_id
+		if player_id != initiator_id and not _initiation_busy.has(player_id):
+			var player_weight: float = NpcInitiation.target_weight(
+				initiator_instance, _player_instance, initiator_template, _player_template,
+				initiator_position, _player_position()
+			)
+			target_candidates.append({"id": player_id, "weight": player_weight})
+
+	# Other NPCs are equally valid targets (pair-agnostic pipeline).
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc == null or npc.instance == null:
+			continue
+		var target_id: String = npc.instance.instance_id
+		if target_id == initiator_id or _initiation_busy.has(target_id):
+			continue
+		if npc.is_conversation_busy() or npc.is_forced_destination():
+			continue
+		var weight: float = NpcInitiation.target_weight(
+			initiator_instance, npc.instance, initiator_template,
+			npc.instance.resolve_template(), initiator_position, npc.instance.position
+		)
+		target_candidates.append({"id": target_id, "weight": weight})
+
+	var target_id: String = NpcInitiation.select_target(
+		target_candidates, (seed_value + initiator_id.hash()) & 0x7FFFFFFFFFFFFFFF
+	)
+	if target_id.is_empty():
+		return
+	var target_instance: NpcInstance = _instances_by_id.get(target_id) as NpcInstance
+	if target_instance == null:
+		return
+
+	var pool: Array = DialogueFilter.build_pool(
+		topics,
+		initiator_instance,
+		target_instance,
+		initiator_template,
+		_template_for(target_instance, target_id),
+		(seed_value + target_id.hash()) & 0x7FFFFFFFFFFFFFFF
+	)
+	var topic: DialogueTopic = NpcInitiation.pick_topic(
+		pool, (seed_value + target_id.hash() * 31) & 0x7FFFFFFFFFFFFFFF
+	)
+	if topic == null:
+		return  # no eligible topics: nothing is locked, nothing is emitted
+
+	_lock_initiation_party(initiator_id, initiator)
+	_lock_initiation_party(target_id, _npcs_by_id.get(target_id) as Npc)
+	_active_initiations.append({
+		"initiator_id": initiator_id,
+		"target_id": target_id,
+		"remaining": maxf(0.1, npc_initiation_hold_sec),
+	})
+	_initiation_cooldowns[initiator_id] = npc_initiation_cooldown_sec
+
+	npc_interaction_started.emit(topic.id, initiator_id, target_id)
+	# Same seam as the player path: 015 resolves and shows feedback. Emit while
+	# both parties are still locked, mirroring `_on_topic_selected()`.
+	dialogue_topic_selected.emit(topic, initiator_id, target_id)
+
+
+## Player position for proximity weighting. The player instance is not mirrored
+## every physics tick, so read the live scene node when present.
+func _player_position() -> Vector2:
+	var player := get_node_or_null("Player") as Node2D
+	if player != null:
+		return player.global_position
+	return _player_instance.position if _player_instance != null else Vector2.ZERO
+
+
+func _lock_initiation_party(id: String, npc: Npc) -> void:
+	_initiation_busy[id] = true
+	if npc != null and is_instance_valid(npc):
+		# Freeze movement without clearing the goal/nav target; releasing later
+		# also applies any class snap that arrived mid-conversation.
+		npc.set_conversation_busy(true)
+
+
+## Tick cooldowns and hold timers. Multiple holds can expire in the same frame;
+## each releases only its own two participants.
+func _update_initiations(delta: float) -> void:
+	for id in _initiation_cooldowns.keys():
+		var remaining: float = float(_initiation_cooldowns[id]) - delta
+		if remaining <= 0.0:
+			_initiation_cooldowns.erase(id)
+		else:
+			_initiation_cooldowns[id] = remaining
+
+	if _active_initiations.is_empty():
+		return
+	var expired: Array = []
+	for i in range(_active_initiations.size() - 1, -1, -1):
+		var entry: Dictionary = _active_initiations[i]
+		var hold_left: float = float(entry.get("remaining", 0.0)) - delta
+		if hold_left > 0.0:
+			entry["remaining"] = hold_left
+		else:
+			expired.append(entry)
+			_active_initiations.remove_at(i)
+	for entry in expired:
+		_release_initiation_party(str(entry.get("initiator_id", "")))
+		_release_initiation_party(str(entry.get("target_id", "")))
+
+
+func _release_initiation_party(id: String) -> void:
+	_initiation_busy.erase(id)
+	var npc: Npc = _npcs_by_id.get(id) as Npc
+	if npc != null and is_instance_valid(npc):
+		npc.set_conversation_busy(false)
+
+
+## Drop all active holds (e.g. on leaving free time) so no busy flag leaks into
+## class or a new day.
+func _clear_active_initiations() -> void:
+	for entry in _active_initiations:
+		_release_initiation_party(str(entry.get("initiator_id", "")))
+		_release_initiation_party(str(entry.get("target_id", "")))
+	_active_initiations.clear()
+	_initiation_busy.clear()
+	_initiation_elapsed = 0.0
+
+
 ## Connect scene-level listeners before the clock starts.
 func _time_connect() -> void:
 	if not TimeManager.state_changed.is_connected(_on_state_changed):
 		TimeManager.state_changed.connect(_on_state_changed)
 	if not TimeManager.skip_simulation_requested.is_connected(_on_skip_requested):
 		TimeManager.skip_simulation_requested.connect(_on_skip_requested)
+	if not TimeManager.day_started.is_connected(_on_day_started):
+		TimeManager.day_started.connect(_on_day_started)
+
+
+## A new day restarts the seeded initiation stream: the attempt counter must not
+## carry over, or replaying day N produces different picks than reaching it in play.
+func _on_day_started(_day: int) -> void:
+	_initiation_attempts = 0
+	_initiation_cooldowns.clear()
 
 
 ## Current player roster id, honouring TimeManager's exported override.
@@ -314,11 +551,26 @@ func _is_free_time_state(state: int) -> bool:
 	return state > 0 and TimeManager.get_state_name().begins_with("FREETIME")
 
 
-## Issue class travel once, in the final `class_travel_lead_sec` of free time.
-func _process(_delta: float) -> void:
-	if _class_travel_issued or not TimeManager.is_running():
+## Advance NPC-initiation timers every frame, then issue class travel once in the
+## final `class_travel_lead_sec` of free time.
+func _process(delta: float) -> void:
+	_update_initiations(delta)
+	if not TimeManager.is_running():
 		return
-	if not _is_free_time_state(TimeManager.get_state()):
+	var state: int = TimeManager.get_state()
+	# A skip holds the clock for a short beat while the state is still FREETIME*.
+	# That time is explicitly not simulated (ticket 011), so do not initiate in it.
+	if (
+		npc_initiation_enabled
+		and not _dialogue_open
+		and not TimeManager.is_skipping()
+		and _is_free_time_state(state)
+	):
+		_initiation_elapsed += delta
+		if _initiation_elapsed >= maxf(0.1, npc_initiation_check_interval_sec):
+			_initiation_elapsed = 0.0
+			_try_npc_initiations()
+	if _class_travel_issued or not _is_free_time_state(state):
 		return
 	var remaining: float = TimeManager.get_phase_duration() - TimeManager.get_phase_elapsed()
 	if remaining > class_travel_lead_sec:
@@ -392,9 +644,13 @@ func _stats_for(id: String) -> Dictionary:
 ## guard. On class entry, let an already-issued class walk finish; hard-snap only
 ## when the transition came from skip() or the lead window was missed.
 func _on_state_changed(new_state: int, _old_state: int) -> void:
+	if not _is_free_time_state(new_state):
+		# Class/BREAK/DAYEND must not inherit a conversation lock or hold timer.
+		_clear_active_initiations()
 	if _is_free_time_state(new_state):
 		_class_travel_issued = false
 		_skip_pending = false
+		_initiation_elapsed = 0.0
 		var seed_value: int = TimeManager.get_day_number()
 		for npc_variant in _npcs:
 			var active_npc: Npc = npc_variant as Npc

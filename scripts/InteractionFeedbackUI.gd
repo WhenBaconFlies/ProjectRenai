@@ -25,6 +25,11 @@ var _is_open: bool = false
 ## Guards against an older auto-dismiss timer hiding a newer result.
 var _generation: int = 0
 
+## Player-involving results that arrived while a panel was already open. They are
+## shown one after another so a concurrent interaction cannot silently replace an
+## outcome the player has not read yet.
+var _queue: Array = []
+
 
 func _ready() -> void:
 	_build()
@@ -86,10 +91,23 @@ func is_open() -> bool:
 	return _is_open
 
 
-## Render one resolver result. Names are display strings ("You", "Jordan", ...).
+## Queue one resolver result. Names are display strings ("You", "Jordan", ...).
+## If a panel is already showing, the new result is displayed when that one closes.
 func show_result(result: Dictionary, initiator_name: String, target_name: String) -> void:
 	if result.is_empty():
 		return
+	if _is_open:
+		_queue.append({
+			"result": result,
+			"initiator_name": initiator_name,
+			"target_name": target_name,
+		})
+		return
+	_display(result, initiator_name, target_name)
+
+
+## Render one resolver result immediately.
+func _display(result: Dictionary, initiator_name: String, target_name: String) -> void:
 	_build()
 	var success: bool = bool(result.get("success", false))
 	_title.text = "Success!" if success else "Not quite..."
@@ -133,6 +151,8 @@ func hide_feedback() -> void:
 	_generation += 1
 	_is_open = false
 	visible = false
+	# Explicit hide (e.g. feedback toggled off) discards pending results.
+	_queue.clear()
 
 
 ## "You: Fam 0→3  Aff 0→3  Mood 50→52  [Stranger → Acquaintance]"
@@ -157,10 +177,25 @@ func _party_line(name: String, before_variant: Variant, after_variant: Variant) 
 
 func _on_display_timeout(token: int) -> void:
 	if token == _generation and _is_open:
-		hide_feedback()
+		_advance()
 
 
 func _on_panel_gui_input(event: InputEvent) -> void:
 	var mouse := event as InputEventMouseButton
 	if mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
-		hide_feedback()
+		_advance()
+
+
+## Close the current result and show the next queued one, if any.
+func _advance() -> void:
+	_generation += 1
+	_is_open = false
+	visible = false
+	if _queue.is_empty():
+		return
+	var next: Dictionary = _queue.pop_front()
+	_display(
+		next.get("result", {}),
+		str(next.get("initiator_name", "")),
+		str(next.get("target_name", ""))
+	)

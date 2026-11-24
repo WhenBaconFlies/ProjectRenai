@@ -4,11 +4,11 @@
 
 **Blocked by:** 015 (Threshold resolution + deltas + meter/mood updates + feedback)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] An NPC initiates an interaction during free time when not busy
-- [ ] Target selection weighs outgoingness and familiarity
-- [ ] The NPC picks randomly from the eligible pool
-- [ ] Threshold roll and deltas apply to both parties' directed meters
-- [ ] Initiation can target the player or another NPC
-- [ ] No crash or duplicate interaction if the target is already interacting
+- [x] An NPC initiates an interaction during free time when not busy
+- [x] Target selection weighs outgoingness and familiarity
+- [x] The NPC picks randomly from the eligible pool
+- [x] Threshold roll and deltas apply to both parties' directed meters
+- [x] Initiation can target the player or another NPC
+- [x] No crash or duplicate interaction if the target is already interacting

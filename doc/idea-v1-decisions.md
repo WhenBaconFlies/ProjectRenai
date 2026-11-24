@@ -245,6 +245,66 @@ Records the clarification decisions made during the brainstorming session.
 - **Resolver result shape:** `resolve()` returns a plain Dictionary (success, roll pieces, margin/scale factors, per-party deltas, per-party before/after meter+mood+relationship snapshots, `relationship_changed`) so feedback and future tickets (016/018) consume one payload. `Game.gd` also emits `dialogue_resolved(result)` for observers.
 - **Verification:** headless Godot 4.2.1 checks for the roll formula, success/failure, margin bounds, modifier matching/clamping, both-party deltas + clamps, all five relationship types + mutual gate, feedback visibility/toggle, and the DebugStart→Game launch path. Temp scripts removed after the run per repo convention.
 
+### Ticket 016 — NPC-initiated interactions (implementation decisions)
+- **Approach A — pure helper + thin wiring + reuse of 014/015 seams (chosen).** A new
+  `scripts/NpcInitiation.gd` (`RefCounted`, static methods) owns outgoingness scoring,
+  initiator eligibility, target weighting and random topic pick; `Game.gd` only runs the
+  periodic check and marks participants busy. Embedding initiation in `Game.gd` (no test
+  seam) or in `Npc` (scene-coupled) was rejected. Mirrors `DialogueFilter`/`DialogueResolver`
+  so the pipeline stays pair-agnostic.
+- **"Not busy" means not already talking and not in forced class travel (user-approved).**
+  `Npc.is_busy()` literally includes ordinary free-time hangout goals, which are almost
+  always active, so using it verbatim would make acceptance criterion 3 effectively
+  unreachable. Normal goal-driven movement does NOT block initiation; only
+  `is_conversation_busy()` (player- or NPC-initiated) and a forced `class:` destination do.
+  `Npc.is_forced_destination()` is the new read-only seam for the latter.
+- **Outgoingness is a trait score (user-approved).** `CharacterTemplate` has no numeric
+  outgoingness field, so score the template's trait ids/tags: positive keys
+  `trait:outgoing`, `outgoing`, `sociable`, `extrovert`, `extroverted`; negative keys
+  `trait:shy`, `shy`, `introvert`, `introverted`, `reserved`. Score = positives − negatives
+  (each distinct key counted once); an NPC may initiate when score ≥ 1. Authored roster:
+  Sam and Taylor (both `trait:outgoing`) qualify; Alex (`trait:shy`), Jordan and Riley do
+  not. Tags "social"/"quiet" are deliberately NOT used because `trait_shy.tres` also
+  carries "social" and would false-positive.
+- **Cadence: check every ~2 s, multiple concurrent interactions allowed (user-approved).**
+  No global one-at-a-time lock. Each initiation holds both participants for ~2 s so it is
+  observable, and each initiator has an ~8 s cooldown so the same NPC cannot dominate.
+  A per-participant busy set prevents overlapping conversations for the same character.
+  Exported/tunable on `Game.gd`: check interval, hold duration, initiator cooldown.
+- **Target weighting = familiarity + outgoingness + proximity (user-approved).** Weight a
+  candidate by `BASE + directed_familiarity/10 × FAM_WEIGHT + target_outgoingness ×
+  OUTGOING_WEIGHT + proximity_bonus`, where proximity falls off linearly to 0 at a default
+  radius of 160 px. Proximity is a weight, not an exclusion, so distant characters remain
+  eligible and the pipeline stays pair-agnostic. The player and other NPCs are both valid
+  targets; weighted selection is seeded and headless-reproducible.
+- **Random pick and resolution reuse the existing seams.** `DialogueFilter.build_pool()`
+  produces the eligible pool, `NpcInitiation.pick_topic()` makes one seeded random choice,
+  and `Game.gd` emits the same `dialogue_topic_selected(topic, initiator_id, target_id)`
+  signal ticket 015 already listens to — no second resolution path, no deltas in 016.
+- **Duplicate guard.** An id-keyed busy set covers both parties; NPC participants get
+  `set_conversation_busy(true)` for the hold (freezing movement without discarding their
+  goal/nav target). A player who is the target is flagged busy in `Game` only — no input
+  lock, since an NPC talking at the player should not seize the controls. Player-initiated
+  dialogue also checks the busy set so it cannot open on a character already interacting.
+- **Review fixes (2026-11-24).** Three evidence-backed findings from the independent
+  reviewer plus one panel-UX change requested by the user were applied:
+  1. Initiation checks now also require `not TimeManager.is_skipping()`, so a skip's
+     clock-halt beat is not simulated (reproduced before the fix with
+     `SKIP_BEAT_PROBE events=1 skip_active_at_emit=true`).
+  2. `_initiation_attempts` resets on `TimeManager.day_started` (cooldowns too), so a
+     replayed day produces the same seeded picks as a day reached through play.
+  3. The feedback panel is shown only for interactions involving the player; NPC↔NPC
+     outcomes still resolve and emit `dialogue_resolved` but do not replace the HUD.
+  4. `InteractionFeedbackUI` queues player-involving results and shows them one after
+     another, so concurrent initiations no longer overwrite an unread outcome.
+  Post-fix verification: 21/21 headless checks PASS (including new regressions for all
+  four fixes), editor scan and 180-frame smoke clean.
+- **Verification:** headless Godot 4.2.1 checks the pure helper (scoring, gating, weighting,
+  seeded selection), the Game integration (initiation fires in free time, both directed
+  meters change, player and NPC targets, empty-pool/no-candidate safety, no duplicates),
+  plus editor scan and main-scene smoke. Temp scripts removed after the run per repo
+  convention.
+
 ### Deferred (non-goals for v1)
 - Main/New Game/Load/Create/Mods/Options menus (functional).
 - Character/map creation tools and map editor.
