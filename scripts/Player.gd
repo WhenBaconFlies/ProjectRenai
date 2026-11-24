@@ -43,6 +43,10 @@ const GROUP_NAME := "player"
 ## Last non-zero movement direction; used to draw the facing dot.
 var _facing: Vector2 = Vector2.RIGHT
 
+## True while a dialogue pool is open (ticket 014). Movement input is ignored
+## until the interaction ends, but the player remains in the scene at its spot.
+var _input_locked: bool = false
+
 
 func _ready() -> void:
 	add_to_group(GROUP_NAME)
@@ -74,9 +78,25 @@ func _snap_to_spawn() -> void:
 	velocity = Vector2.ZERO
 
 
+## Lock/unlock movement for the duration of a conversation. Locking also stops
+## any residual velocity so the player does not slide while choosing a topic.
+func set_input_locked(locked: bool) -> void:
+	_input_locked = locked
+	if locked:
+		velocity = Vector2.ZERO
+
+
+func is_input_locked() -> bool:
+	return _input_locked
+
+
 ## Physics tick: build the input vector, steer velocity, then move with
 ## collision. `Input.get_vector` normalises diagonals and reads gamepad sticks.
+## While a dialogue pool is open the player is frozen (ticket 014).
 func _physics_process(delta: float) -> void:
+	if _input_locked:
+		velocity = Vector2.ZERO
+		return
 	var input_vector := Input.get_vector(
 		"move_left", "move_right", "move_up", "move_down"
 	)

@@ -10,7 +10,14 @@
 ## NPCs walk to their next class marker in the final seconds of free time and
 ## finish the walk at class start; skipped transitions still hard-snap. All of
 ## this happens BEFORE start_day() so the initial PERIOD1 transition is observed.
+## Ticket 014 adds the player-facing dialogue trigger: a pure filter builds a
+## pool, the pool UI shows it, and this script only wires the two together. No
+## resolution happens here — ticket 015 consumes `dialogue_topic_selected`.
 extends Node2D
+
+## Emitted when the player picks a topic. Intentionally carries ids rather than
+## node references so the pipeline stays pair-agnostic for ticket 016.
+signal dialogue_topic_selected(topic: DialogueTopic, initiator_id: String, target_id: String)
 
 ## Roster id for the player. Mirrors TimeManager's exported default; the player
 ## instance shape arrives with the save/load ticket, so for now only the id and
@@ -28,6 +35,16 @@ var _instances_by_id: Dictionary = {}
 var _map: Map = null
 var _spawner: NpcSpawner = null
 
+## Player-side state for the pair-agnostic dialogue pipeline (ticket 014).
+var _player_instance: NpcInstance = null
+var _player_template: CharacterTemplate = null
+
+## Conversation wiring. Only one conversation can be open at a time.
+var _interaction: InteractionComponent = null
+var _dialogue_ui: DialoguePoolUI = null
+var _dialogue_target: Npc = null
+var _dialogue_open: bool = false
+
 ## Guards the per-frame "free time nearly over" check to one departure per phase.
 var _class_travel_issued: bool = false
 ## Set by skip_simulation_requested; consumed on the next state_changed so a
@@ -37,6 +54,8 @@ var _skip_pending: bool = false
 
 func _ready() -> void:
 	_setup_npcs()
+	_setup_player_instance()
+	_setup_dialogue()
 	_time_connect()
 	# A fresh start has no save to restore. A loaded save (ticket 017) is
 	# restored by that ticket instead, so never overwrite a running clock.
@@ -70,6 +89,126 @@ func _setup_npcs() -> void:
 	# into a single attendance record.
 	TimeManager.set_roster(_player_id(), _instances_by_id.keys())
 	TimeManager.set_stats_provider(Callable(self, "_stats_for"))
+
+
+## Build the player's instance from an authored template. Reusing NpcInstance
+## keeps both sides of the dialogue pipeline the same shape and gives ticket 017
+## one player resource to persist.
+func _setup_player_instance() -> void:
+	var instance_id: String = _player_id()
+	var template_id: String = TimeManager.player_template_id
+	if template_id.is_empty():
+		template_id = "char:alex"
+
+	var loader: Node = NpcInstance._mod_loader()
+	if loader != null:
+		var bucket: Variant = loader.get("TYPE_CHARACTER")
+		var bucket_name: String = str(bucket) if bucket != null else "character"
+		_player_template = loader.call("get_resource", bucket_name, template_id) as CharacterTemplate
+		if _player_template == null and instance_id != template_id:
+			_player_template = loader.call("get_resource", bucket_name, instance_id) as CharacterTemplate
+	if _player_template == null and not TimeManager.player_template_path.is_empty():
+		if ResourceLoader.exists(TimeManager.player_template_path):
+			_player_template = ResourceLoader.load(TimeManager.player_template_path) as CharacterTemplate
+
+	_player_instance = NpcInstance.from_template(_player_template, instance_id)
+	if _player_instance.display_name.is_empty():
+		_player_instance.display_name = "Player"
+	# Both sides of a conversation must resolve through one id map so tickets
+	# 015/016 can apply deltas uniformly (including player-targeted interactions).
+	_instances_by_id[_player_instance.instance_id] = _player_instance
+
+
+## Connect the proximity trigger and the pool UI. Missing nodes are a soft
+## warning so older/stripped scenes still run (there is simply no dialogue).
+func _setup_dialogue() -> void:
+	_interaction = get_node_or_null("Player/InteractionComponent") as InteractionComponent
+	_dialogue_ui = get_node_or_null("DialogueLayer/DialoguePoolUI") as DialoguePoolUI
+
+	if _interaction != null:
+		if not _interaction.interaction_requested.is_connected(_on_interaction_requested):
+			_interaction.interaction_requested.connect(_on_interaction_requested)
+	else:
+		push_warning("Game: no InteractionComponent under Player; dialogue trigger disabled")
+
+	if _dialogue_ui != null:
+		if not _dialogue_ui.topic_selected.is_connected(_on_topic_selected):
+			_dialogue_ui.topic_selected.connect(_on_topic_selected)
+		if not _dialogue_ui.cancelled.is_connected(_on_conversation_cancelled):
+			_dialogue_ui.cancelled.connect(_on_conversation_cancelled)
+	else:
+		push_warning("Game: no DialoguePoolUI under DialogueLayer; dialogue pool disabled")
+
+
+## Open the pool for the nearest NPC in range. E works at any time of day
+## (user decision); only proximity and an already-open conversation gate it.
+func _on_interaction_requested(target: Npc) -> void:
+	if _dialogue_open or _player_instance == null:
+		return
+	if _interaction == null or _dialogue_ui == null:
+		return
+	if target == null or not is_instance_valid(target) or target.instance == null:
+		return
+	if target.is_conversation_busy():
+		return
+
+	var topics: Array = []
+	var loader: Node = NpcInstance._mod_loader()
+	if loader != null:
+		var bucket: Variant = loader.get("TYPE_DIALOGUE")
+		var bucket_name: String = str(bucket) if bucket != null else "dialogue"
+		topics = loader.call("get_all", bucket_name) as Array
+
+	var pool: Array = DialogueFilter.build_pool(
+		topics,
+		_player_instance,
+		target.instance,
+		_player_template,
+		target.instance.resolve_template()
+	)
+
+	_dialogue_open = true
+	_dialogue_target = target
+	_interaction.set_enabled(false)
+	var player := get_node_or_null("Player") as Player
+	if player != null:
+		player.set_input_locked(true)
+	target.set_conversation_busy(true)
+
+	if pool.is_empty():
+		_dialogue_ui.show_empty(_player_instance.instance_id, target.instance.instance_id)
+	else:
+		_dialogue_ui.show_pool(pool, _player_instance.instance_id, target.instance.instance_id)
+
+
+## Selection ends the interaction. Resolution belongs to ticket 015, which
+## listens for the signal; nothing is rolled or written here.
+func _on_topic_selected(topic: DialogueTopic, initiator_id: String, target_id: String) -> void:
+	if not _dialogue_open:
+		return
+	# Emit while the player and target are still locked: ticket 015 resolves the
+	# topic from this signal and must see the interaction as still in progress.
+	dialogue_topic_selected.emit(topic, initiator_id, target_id)
+	_close_conversation()
+
+
+## Cancel (or dismissing the empty fallback) ends the interaction with no pick.
+func _on_conversation_cancelled() -> void:
+	_close_conversation()
+
+
+func _close_conversation() -> void:
+	if _dialogue_ui != null:
+		_dialogue_ui.hide_pool()
+	var player := get_node_or_null("Player") as Player
+	if player != null:
+		player.set_input_locked(false)
+	if is_instance_valid(_dialogue_target):
+		_dialogue_target.set_conversation_busy(false)
+	_dialogue_target = null
+	_dialogue_open = false
+	if _interaction != null:
+		_interaction.set_enabled(true)
 
 
 ## Connect scene-level listeners before the clock starts.

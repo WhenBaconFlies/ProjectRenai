@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/MapRenderer.gd" id="1_mr"]
 [ext_resource type="Resource" path="res://resources/maps/map_school.tres" id="2_map"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://scripts/FollowCamera.gd" id="4_camera"]
 [ext_resource type="Script" path="res://scripts/Minimap.gd" id="5_minimap"]
 [ext_resource type="Script" path="res://scripts/Game.gd" id="6_game"]
+[ext_resource type="Script" path="res://scripts/InteractionComponent.gd" id="7_interaction"]
+[ext_resource type="Script" path="res://scripts/DialoguePoolUI.gd" id="8_dialogue_ui"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 6.0
@@ -25,6 +27,9 @@ map_renderer_path = NodePath("../MapRenderer")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
 shape = SubResource("CircleShape2D_player")
+
+[node name="InteractionComponent" type="Area2D" parent="Player"]
+script = ExtResource("7_interaction")
 
 [node name="FollowCamera" type="Camera2D" parent="Player"]
 script = ExtResource("4_camera")
@@ -49,3 +54,12 @@ mouse_filter = 2
 script = ExtResource("5_minimap")
 player_path = NodePath("../../Player")
 map_renderer_path = NodePath("../../MapRenderer")
+
+[node name="DialogueLayer" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="DialoguePoolUI" type="Control" parent="DialogueLayer"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("8_dialogue_ui")
