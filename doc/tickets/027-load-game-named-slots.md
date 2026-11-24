@@ -4,11 +4,11 @@
 
 **Blocked by:** 026 (Main Menu + New Game routing)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] `LoadGame` lists named slots from `SaveManager.list_slots()` with readable metadata
-- [ ] Selecting a slot loads it via `GameManager` and enters the restored day
-- [ ] A slot can be deleted with confirmation
-- [ ] No live-state creation from the Main Menu; the UI explains creation happens in-game
-- [ ] F5/F9 still work during play
-- [ ] A reload restores state identically with template linkage (v1 regression)
+- [x] `LoadGame` lists named slots from `SaveManager.list_slots()` with readable metadata
+- [x] Selecting a slot loads it via `GameManager` and enters the restored day
+- [x] A slot can be deleted with confirmation
+- [x] No live-state creation from the Main Menu; the UI explains creation happens in-game
+- [x] F5/F9 still work during play
+- [x] A reload restores state identically with template linkage (v1 regression)

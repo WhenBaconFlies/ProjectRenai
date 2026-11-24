@@ -254,12 +254,19 @@ func _sanitize_slot(raw: String) -> String:
 	var was_changed: bool = cleaned != raw
 	if cleaned.is_empty():
 		cleaned = "slot"
-	if cleaned.length() > 55:
-		cleaned = cleaned.substr(0, 55)
+	# Reserve room for the hash suffix *before* truncating. A stored name must
+	# re-sanitize to itself: list_slots() returns sanitized names that callers
+	# (e.g. the Load Game UI) feed straight back into load_slot()/delete_slot().
+	# Truncating to 55 and then appending 9 chars made the second pass produce a
+	# different name, so a long slot could be listed but never opened.
+	var suffix: String = ""
 	if was_changed:
 		# String.hash() is available in Godot 4.2 (String.md5() is not).
-		cleaned = cleaned + "_" + ("%08x" % (absi(raw.hash()) % 0x100000000))
-	return cleaned
+		suffix = "_" + ("%08x" % (absi(raw.hash()) % 0x100000000))
+	var max_length: int = 55 - suffix.length()
+	if cleaned.length() > max_length:
+		cleaned = cleaned.substr(0, max_length)
+	return cleaned + suffix
 
 
 func _ensure_save_dir() -> void:

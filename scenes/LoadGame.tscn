@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/PlaceholderScreen.gd" id="1_placeholder"]
+[ext_resource type="Script" path="res://scripts/LoadGame.gd" id="1_load_game"]
 
 [node name="LoadGame" type="Control"]
 layout_mode = 3
@@ -9,8 +9,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_placeholder")
-screen_title = "Load Game"
+script = ExtResource("1_load_game")
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -29,13 +28,13 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -170.0
-offset_top = -70.0
-offset_right = 170.0
-offset_bottom = 70.0
+offset_left = -320.0
+offset_top = -235.0
+offset_right = 320.0
+offset_bottom = 235.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="CenterBox"]
 layout_mode = 2
@@ -43,11 +42,28 @@ text = "Load Game"
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 30
 
-[node name="NoteLabel" type="Label" parent="CenterBox"]
+[node name="InfoLabel" type="Label" parent="CenterBox"]
 layout_mode = 2
-text = "Load Game will be available in a later update."
+text = "Named save slots are created while playing, from the Pause menu (Esc)."
 horizontal_alignment = 1
 theme_override_font_sizes/font_size = 14
+
+[node name="StatusLabel" type="Label" parent="CenterBox"]
+layout_mode = 2
+text = ""
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 13
+
+[node name="SlotScroll" type="ScrollContainer" parent="CenterBox"]
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="SlotList" type="VBoxContainer" parent="CenterBox/SlotScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
 
 [node name="BackButton" type="Button" parent="CenterBox"]
 custom_minimum_size = Vector2(240, 44)
