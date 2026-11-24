@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="DialogueResponse" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueResponse.gd" id="1_response"]
+
+[resource]
+script = ExtResource("1_response")
+id = "response:ask_day_success_friend"
+text = "It's been a good day so far, thanks for asking."
+topic_id = "topic:ask_day"
+outcomes = PackedStringArray("success")
+relationship_bands = PackedStringArray("Friend", "Lover")
+checked_stat = "charisma"
+difficulty = 6
+affection_delta_success = 4
+familiarity_delta_success = 2
+mood_delta_success = 2
+affection_delta_failure = -1
+familiarity_delta_failure = 1
+mood_delta_failure = -2

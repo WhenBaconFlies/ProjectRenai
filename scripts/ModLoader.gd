@@ -13,7 +13,9 @@
 ##
 ## Authored base characters under res://resources/characters/ are registered into
 ## the `character` bucket first (ticket 012), so NPC spawning has a single
-## resolution path for both base and modded templates.
+## resolution path for both base and modded templates. Ticket 021 adds the
+## `greeting` and `response` buckets for the two new dialogue resource types;
+## they follow the same add-only rules as `dialogue`.
 extends Node
 
 ## --- Registry bucket names -------------------------------------------------
@@ -22,6 +24,8 @@ const TYPE_TRAIT: String = "trait"
 const TYPE_ITEM: String = "item"
 const TYPE_MAP: String = "map"
 const TYPE_DIALOGUE: String = "dialogue"
+const TYPE_GREETING: String = "greeting"
+const TYPE_RESPONSE: String = "response"
 
 ## --- Filesystem conventions ------------------------------------------------
 const DEFAULT_MODS_ROOT: String = "res://mods/"
@@ -36,6 +40,12 @@ const BASE_CHARACTERS_DIR: String = "res://resources/characters/"
 ## Authored dialogue topics (ticket 014). Registered alongside base characters
 ## so every eligible topic — base or mod — comes from the same registry.
 const BASE_DIALOGUES_DIR: String = "res://resources/dialogue/"
+
+## Authored greetings and responses (ticket 021). Kept in their own folders so
+## the three dialogue resource types stay distinguishable in the editor, while
+## each still flows through the same add-only registry as base dialogue topics.
+const BASE_GREETINGS_DIR: String = "res://resources/dialogue/greetings/"
+const BASE_RESPONSES_DIR: String = "res://resources/dialogue/responses/"
 
 const BASE_OWNER: String = "base"
 
@@ -166,6 +176,8 @@ func _reset_registries() -> void:
 		TYPE_ITEM: {},
 		TYPE_MAP: {},
 		TYPE_DIALOGUE: {},
+		TYPE_GREETING: {},
+		TYPE_RESPONSE: {},
 	}
 	_owners.clear()
 	_loaded_mods.clear()
@@ -190,6 +202,20 @@ func _register_base_content() -> void:
 			register_resource(TYPE_DIALOGUE, resource, BASE_OWNER)
 		else:
 			_log("WARN: base content '%s' is not a DialogueTopic; skipping" % path)
+
+	for path in _base_resource_paths(BASE_GREETINGS_DIR):
+		var resource: Resource = ResourceLoader.load(path)
+		if resource is DialogueGreeting:
+			register_resource(TYPE_GREETING, resource, BASE_OWNER)
+		else:
+			_log("WARN: base content '%s' is not a DialogueGreeting; skipping" % path)
+
+	for path in _base_resource_paths(BASE_RESPONSES_DIR):
+		var resource: Resource = ResourceLoader.load(path)
+		if resource is DialogueResponse:
+			register_resource(TYPE_RESPONSE, resource, BASE_OWNER)
+		else:
+			_log("WARN: base content '%s' is not a DialogueResponse; skipping" % path)
 
 
 ## Resource file paths in one authored base directory, sorted for stable order.
@@ -411,6 +437,10 @@ func _type_of(resource: Resource) -> String:
 		return TYPE_MAP
 	if resource is DialogueTopic:
 		return TYPE_DIALOGUE
+	if resource is DialogueGreeting:
+		return TYPE_GREETING
+	if resource is DialogueResponse:
+		return TYPE_RESPONSE
 	return ""
 
 

@@ -60,6 +60,19 @@ Source context: `doc/idea-v0.md` (original concept), `doc/idea-v1-final.md` (v1 
 - **Response keying party:** the 5-type relationship band is derived for the **responder toward the speaker** (for player-initiated: the NPC's meter toward the player), since that is what the spoken line expresses.
 - **Mods Menu deployment:** support both project-local and exported builds. Bundled base mods stay in `res://mods/`; an additional `user://mods/` scan root is added. Enable/disable flags are written to `user://settings.cfg` (not `res://` `.disabled` markers), so the menu works in a read-only export. Changes take effect on next launch.
 
+## Ticket 021 — schema + registry decisions
+
+Resolved the schema defaults deferred below; these are the contracts ticket 021 builds and later tickets consume.
+
+- **Approach:** extend the existing `DialogueTopic`/`ModLoader` patterns — two new typed `Resource` classes with `class_name`, two new `ModLoader` buckets, and authored base `.tres` samples. No `DialogueFilter`/`DialogueResolver`/`Game.gd` changes in this ticket (they belong to 023/024).
+- **`DialogueGreeting` fields (typed):** `id`, `text`; eligibility as `relationship_types: PackedStringArray` (empty = any; values = the five `DialogueResolver` type names), `min_mood: int = 0` / `max_mood: int = 100` (0/100 = no gate), `periods: PackedStringArray` of `TimeManager` state names (empty = any), `required_traits` / `required_interests: PackedStringArray` (empty = no gate), and `weight: float = 1.0` for a seeded weighted pick (authored now, consumed by 023). Rejected: named enum bands (lose the resolver's exact thresholds) and a single untyped Dictionary blob (not editor-readable).
+- **Period vocabulary:** `TimeManager` state names (e.g. `PERIOD1`, `FREETIME1`), not clock-hour bands; deriving the current period stays with the later conversation tickets.
+- **`DialogueResponse` key fields:** `outcomes: PackedStringArray` and `relationship_bands: PackedStringArray`, each allowing several values. An empty array is a wildcard for that field. This gives the fallback chain: exact (both arrays contain the values) → topic default (arrays empty, `topic_id` set) → generic authored line (arrays empty, `topic_id` empty) → code-generated line. Rejected: two single strings (less expressive) and `success: bool` + `is_default` (still needs a separate wildcard flag).
+- **Line-only rule:** a `DialogueResponse` is a line-only reaction when `checked_stat` is empty, mirroring `DialogueTopic`'s "empty = no stat bonus". Other roll fields may be authored but are ignored; expose `is_line_only()` and document it on the resource. Rejected: a separate `line_only` bool (two sources of truth) and "all roll fields zero" (an intentional zero-delta roll becomes impossible to author).
+- **`DialogueResponse` roll fields:** `checked_stat: String`, `difficulty: int`, and success/failure `affection`/`familiarity`/`mood` deltas as ints — identical names and semantics to `DialogueTopic` so ticket 023 can reuse `DialogueResolver` unchanged.
+- **Registry layout:** new buckets `TYPE_GREETING` and `TYPE_RESPONSE`; base content in `resources/dialogue/greetings/` and `resources/dialogue/responses/` via `BASE_GREETINGS_DIR` / `BASE_RESPONSES_DIR`; add-only duplicate-ID rules unchanged. One sample `.tres` of each type authored as base content proves editor creation, save, and round-trip.
+- **Verification:** a dedicated headless harness (`tests/DialogueSchemaBootstrap.*`, `tests/DialogueSchemaTest.gd`, `tests/run_dialogue_schema_tests.ps1`) asserts field round-trips, `is_line_only()`, and registry add-only behaviour; the v1 harnesses re-run as regressions.
+
 ## to-spec decisions (v2)
 - **Testing seam:** one persistent integration harness at the highest seam (menus/New Game → conversation → menus/settings/mods → save/reopen → relationship goal), reusing v1's marker-based pass/fail pattern; v1 harnesses re-run as regressions.
 - **Issue tracker:** v2 spec published as a GitHub issue with `ready-for-agent` label.
@@ -74,10 +87,10 @@ Source context: `doc/idea-v0.md` (original concept), `doc/idea-v1-final.md` (v1 
 
 ## Deferred unknowns (left to builder/plan)
 
-- Exact schema fields/defaults for greetings and responses (esp. greeting weight and response roll-field defaults).
+- ~~Exact schema fields/defaults for greetings and responses (esp. greeting weight and response roll-field defaults).~~ Resolved in "Ticket 021 — schema + registry decisions" above.
 - Exact `Conversation` method signatures and phase enum names; whether mid-conversation state is saved (assumption: saves happen between turns).
 - Which windowed resolution presets and ConfigFile keys.
-- How "period/time of day" is derived (existing `TimeManager` period vs. clock hour).
+- ~~How "period/time of day" is derived (existing `TimeManager` period vs. clock hour).~~ Schema vocabulary resolved to `TimeManager` state names in "Ticket 021 — schema + registry decisions"; deriving the live period remains with the later conversation tickets.
 - Exact shape of the free-time gating callable for NPC initiation.
 - Menu visual styling, placeholder portrait visuals, trait names/costs, topic distribution, test counts.
 - Any C# migration (explicitly out of v2).
