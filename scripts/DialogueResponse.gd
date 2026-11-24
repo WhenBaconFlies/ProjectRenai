@@ -11,9 +11,11 @@ extends Resource
 ## A response may be a **line-only reaction** (no roll, no deltas) or a normal
 ## roll with its own stat/difficulty/deltas. The rule is simple and deliberate:
 ## an empty `checked_stat` means line-only. Other roll fields may still be
-## authored, but they are ignored while `checked_stat` is empty. This mirrors
-## DialogueTopic's "empty checked_stat = no stat bonus" convention and gives
-## the authoring pipeline a single unambiguous switch.
+## authored, but they are ignored while `checked_stat` is empty. This deliberately
+## diverges from DialogueTopic, where an empty `checked_stat` only removes the
+## stat bonus and the roll still applies deltas; a line-only response must be
+## gated by is_line_only() before resolution. The single field gives the authoring
+## pipeline one unambiguous switch.
 
 
 ## --- Identity ---
@@ -77,7 +79,7 @@ extends Resource
 
 ## True when this response is a line-only reaction: no roll and no deltas.
 ## Defined as `checked_stat.is_empty()`; all other roll fields are ignored in
-## that case, even when authored. Ticket 023's resolver calls this before
-## deciding whether to roll.
+## that case, even when authored. Ticket 023 must generalize DialogueResolver
+## to consume response-owned roll fields and call this before deciding to roll.
 func is_line_only() -> bool:
 	return checked_stat.is_empty()

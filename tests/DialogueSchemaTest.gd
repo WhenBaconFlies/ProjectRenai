@@ -18,6 +18,9 @@ const MOD_GREETING_PATH: String = MOD_FOLDER + "greeting_mod_test.tres"
 const MOD_RESPONSE_PATH: String = MOD_FOLDER + "response_mod_test.tres"
 const MOD_MANIFEST_PATH: String = MOD_FOLDER + "mod.json"
 
+## T1..T21 plus T22 (schema default weight) and T23 (completeness self-check).
+const EXPECTED_CHECKS: int = 23
+
 var _passed: int = 0
 var _failed: int = 0
 
@@ -36,6 +39,7 @@ func _run() -> void:
 	_check_base_samples()
 	_check_registry_buckets()
 	_check_mod_registration()
+	_check(DialogueGreeting.new().weight == 1.0, "T22: DialogueGreeting schema default weight is 1.0")
 	_cleanup()
 	_finish()
 
@@ -53,7 +57,7 @@ func _round_trip_greeting() -> bool:
 	source.max_mood = 90
 	source.periods = PackedStringArray(["FREETIME1", "FREETIME2"])
 	source.required_traits = PackedStringArray(["trait:outgoing"])
-	source.required_interests = PackedStringArray(["trait:likes_sports"])
+	source.required_interests = PackedStringArray(["interest:likes_sports"])
 	source.weight = 1.75
 	if ResourceSaver.save(source, GREETING_PATH) != OK:
 		return false
@@ -123,8 +127,8 @@ func _check_line_only_rule() -> void:
 	zero_delta_roll.difficulty = 0
 	zero_delta_roll.affection_delta_success = 0
 	_check(not zero_delta_roll.is_line_only(), "T7: an intentional zero-delta roll is not line-only")
-	var authored_generic := ResourceLoader.load(RESPONSE_PATH) as DialogueResponse
-	_check(authored_generic != null and not authored_generic.is_line_only(), "T8: a populated checked_stat round-trips as rollable")
+	var round_trip_response := ResourceLoader.load(RESPONSE_PATH) as DialogueResponse
+	_check(round_trip_response != null and not round_trip_response.is_line_only(), "T8: a populated checked_stat round-trips as rollable")
 
 
 ## --- Authored base content and registry ------------------------------------
@@ -132,7 +136,7 @@ func _check_line_only_rule() -> void:
 func _check_base_samples() -> void:
 	var generic := ModLoader.get_resource(ModLoader.TYPE_GREETING, "greeting:generic") as DialogueGreeting
 	var gated := ModLoader.get_resource(ModLoader.TYPE_GREETING, "greeting:friend_free_time") as DialogueGreeting
-	_check(generic != null and generic.weight == 1.0, "T9: generic greeting base sample registered with default weight")
+	_check(generic != null and generic.weight == 1.0, "T9: generic greeting base sample registered with authored weight 1.0")
 	_check(
 		gated != null and gated.relationship_types.has("Friend") and gated.periods.has("FREETIME1") and gated.weight == 1.5,
 		"T10: gated greeting base sample registered with its eligibility fields"
@@ -186,14 +190,18 @@ func _make_mod_fixture() -> void:
 	greeting.id = "greeting:mod_test"
 	greeting.text = "Mod greeting"
 	greeting.weight = 2.0
-	ResourceSaver.save(greeting, MOD_GREETING_PATH)
+	if ResourceSaver.save(greeting, MOD_GREETING_PATH) != OK:
+		push_error("[021] cannot write mod greeting fixture")
+		return
 	var response := DialogueResponse.new()
 	response.id = "response:mod_test"
 	response.text = "Mod reply"
 	response.topic_id = "topic:ask_day"
 	response.checked_stat = "wisdom"
 	response.difficulty = 4
-	ResourceSaver.save(response, MOD_RESPONSE_PATH)
+	if ResourceSaver.save(response, MOD_RESPONSE_PATH) != OK:
+		push_error("[021] cannot write mod response fixture")
+		return
 
 	var manifest: Dictionary = {
 		"id": "test_dialogue_mod",
@@ -279,6 +287,8 @@ func _check(ok: bool, label: String) -> void:
 
 
 func _finish() -> void:
+	# Guards against a truncated _run() printing the authoritative pass marker.
+	_check(_passed == EXPECTED_CHECKS - 1, "T23: all expected 021 checks executed")
 	print("[021] RESULT passed=%d failed=%d" % [_passed, _failed])
 	if _failed == 0:
 		print("ALL_021_CHECKS_PASSED")
