@@ -1,0 +1,525 @@
+# Project Renai v1 — Final Compilation
+
+This document compiles what **v1 actually delivered**, the seams left open for later work, and the complete decision record. It is the end-of-v1 snapshot.
+
+Companions:
+- `doc/idea-v0.md` / `doc/idea-v0-decisions.md` — original idea and earliest clarifications.
+- `doc/idea-v1.md` — v1 specification.
+- `doc/idea-v1-brainstorming.md` — design (Approach A) and foundations.
+- `doc/idea-v1-spec.md` — agent-facing spec (problem, user stories, implementation/testing decisions, acceptance criteria).
+- `doc/idea-v1-decisions.md` — every decision made throughout v1 (reproduced in full in Appendix A).
+- `doc/tickets/001…020.md` — the 20 vertical-slice tickets; `doc/code-review/` — per-ticket reviews.
+
+Engine: Godot 4.2 (Forward Plus) · Platform: Windows desktop · Languages: GDScript (all shipped code in v1) + C# anticipated later for data-heavy systems.
+
+---
+
+## 1. Goal and approach
+
+Build a **modular, data-driven 2D quarter-view school-life simulation** in which romance and interacting character traits are the heart of the experience. The defining requirement is **modularity**: characters, maps, dialogue, traits, and items are `.tres` files that can be dropped into another project or into `mods/` and registered with no code changes.
+
+v1 was executed as **Approach A — data-first vertical slice** (chosen over a full architecture-first scaffold or a throwaway spike): schemas and registries first, then ModLoader + SaveManager, then one playable day with real content. Surface features (menus, creation tools, mod UI, calendar/break screens) were deferred. Chunk loading was designed as an **additive post-v1 optimization (Plan D hybrid)** and its tickets 019–020 were also completed in this v1 cycle.
+
+## 2. What v1 delivered
+
+All **20 tickets (001–020)** were implemented, reviewed, and verified; GitHub issues #2–#21 were created as sub-issues of spec issue #1 (all with `ready-for-agent`). The result is a runnable debug slice driven by `DebugStart.tscn` (the project's `run/main_scene`), with:
+- one 32×24 tile / 512×384 px debug school map (plus the original small map preserved),
+- a player and four NPCs built from authored character templates plus a sample mod,
+- a full day state machine, free-time AI, player and NPC-initiated dialogue, relationship meters, relationship feedback, and save/load,
+- mod loading with dependencies and chunk-aware rendering plus tiered NPC simulation,
+- three persistent headless test harnesses (day loop, chunk renderer, chunk manager).
+
+### 2.1 Ticket-by-ticket completion (summary)
+
+| # | Ticket | Delivered |
+|---|--------|-----------|
+| 001 | Project scaffolding | Folder layout (`scenes/`, `scripts/`, `resources/`, `assets/`, `mods/`, `saves/`), `.gitignore`. |
+| 002 | Autoload skeleton | Six GDScript autoloads (`GameManager`, `SaveManager`, `TimeManager`, `ModLoader`, `AudioManager`, `LocalizationManager`) registered with `*` prefix; deliberately no `class_name`. |
+| 003 | DebugStart launcher | `DebugStart.tscn` + `DebugStart.gd` → `GameManager.start_fresh_day()` → deferred swap to placeholder `Game.tscn`; `run/main_scene` set. |
+| 004 | CharacterTemplate + Trait schemas | `CharacterTemplate.gd`, `Trait.gd` resources; authored trait and character templates. |
+| 005 | Item + Map schemas | `Item.gd` (PackedScene, sprite/collider, properties), `Map.gd` (tiles, placed objects, spawn, navmesh, `chunk_size` + derived chunk grid, markers, `hangout_interests`). |
+| 006 | DialogueTopic schema | `DialogueTopic.gd` (conditions, checked stat/difficulty, success/failure deltas; later `recipient_modifiers`). |
+| 007 | Minimal base content | Base maps, five characters, six traits, three items, two dialogue topics, one sample mod — all authored in-editor. |
+| 008 | Map renderer | `MapRenderer.gd`: TileMap, placed objects from Item PackedScenes, NavigationRegion2D, spawn point, fallback TileSet. |
+| 009 | Free movement + camera + minimap | `Player.gd` (CharacterBody2D, WASD/arrows/gamepad), `FollowCamera.gd`, `Minimap.gd`; input actions; collision; camera jitter + limits fixed by testing. |
+| 010 | ModLoader | Typed ID→resource registries, `mod.json` validation, Kahn dependency sort + cycle detection, enable/disable (flag or `.disabled`), add-only, diagnostics, base-content registration. |
+| 011 | Day state machine | `TimeManager.gd`: explicit `DayState` enum, `advance(delta)`, `skip()` with beat, attendance + grade stub, day snapshot/restore, DayEnd save hooks, BREAK state. |
+| 012 | NPC spawning & scheduling | `NpcInstance.gd`, `NpcSpawner.gd`, `Npc.gd`; four NPCs from templates; per-instance period→marker schedules; attendance by stable instance id; `tier` runtime field. |
+| 013 | NPC goal-driven AI | `NpcAi.gd` (seeded interest/mood goal selection, hangout markers), `NavigationAgent2D` movement, stall/obstacle handling, `is_busy()`, class-travel (user change: NPCs walk to class). |
+| 014 | Dialogue filtering + pool + trigger | `DialogueFilter.gd`, `InteractionComponent.gd`, `DialoguePoolUI.gd`; E key, 3–5 seeded pool, conditions, Cancel; player reuses `NpcInstance` shape. |
+| 015 | Threshold resolution + meters + feedback | `DialogueResolver.gd`, `InteractionFeedbackUI.gd`; threshold roll, bounded margin scaling, recipient modifiers, both-party deltas, five relationship types + mutual romance gate, feedback toggle. |
+| 016 | NPC-initiated interactions | `NpcInitiation.gd`; outgoingness trait score, ~2 s cadence, familiarity/outgoingness/proximity weighting, random pick via 014/015 seams, busy set, multiple concurrent interactions. |
+| 017 | Save/load | `SaveGame.gd` + `SaveManager` slot API; `.tres` slots in `user://`, F5/F9 debug hotkeys, version + shape validation, state-provider seam, exact restore, AI resume, missing-template recovery. |
+| 018 | Day-loop integration & acceptance | Persistent `tests/` harness (bootstrap + runner + `run_integration.ps1`); all 10 acceptance criteria asserted; RED/GREEN proof; 41/41 checks pass. |
+| 019 | ChunkManager + tiered simulation | `ChunkManager.gd` autoload, `ChunkConfig.gd`, `Npc.simulate_tick(dt, coarse)`, hysteresis tiers, promotion interpolation, far coarse pathing, tick scheduler, interaction guard; persistent harness; 11/11 checks, 018 (41/41) and 020 (58/58) re-run as regressions. |
+| 020 | Chunk-aware renderer | Per-chunk placed-object load/unload with one-chunk hysteresis, single TileMap with native culling, `Map` chunk helpers, `ChunkGridOverlay.gd` (F6 toggle), tile-cell bug fixed; persistent harness; 58/58 checks. |
+
+### 2.2 Implemented architecture
+
+**Autoloads** (`project.godot`): `GameManager`, `SaveManager`, `TimeManager`, `ModLoader`, `AudioManager`, `LocalizationManager`, `ChunkManager`.
+
+**Scenes:** `DebugStart.tscn` (entry point), `Game.tscn` (MapRenderer + Player with FollowCamera + Minimap + InteractionComponent + DialoguePoolUI + InteractionFeedbackUI + ChunkGridOverlay), plus three `tests/*Bootstrap.tscn`.
+
+**Core scripts** (`scripts/`): resource schemas (`CharacterTemplate`, `Trait`, `Item`, `Map`, `DialogueTopic`, `NpcInstance`, `SaveGame`, `ChunkConfig`), systems (`GameManager`, `SaveManager`, `TimeManager`, `ModLoader`, `ChunkManager`, `MapRenderer`, `NpcSpawner`, `Npc`, `NpcAi`, `Player`, `FollowCamera`, `Minimap`, `ChunkGridOverlay`, `Game`, `DebugStart`, `AudioManager`, `LocalizationManager`), pure helpers (`DialogueFilter`, `DialogueResolver`, `NpcInitiation`), and UI (`InteractionComponent`, `DialoguePoolUI`, `InteractionFeedbackUI`).
+
+**Content** (`resources/`): `maps/map_school.tres` (large debug map, `map:school_debug_large`) and `map_school_small.tres`; `characters/char_alex|jordan|riley|sam|taylor.tres`; `traits/trait_athletic|dislikes_noise|likes_sports|outgoing|shy|studious.tres`; `items/item_desk|bench|wall.tres`; `dialogue/topic_ask_day|compliment.tres`.
+
+**Mods** (`mods/sample_mod/`): `mod.json` with dependency declaration, `entry.gd` (`register(loader)`), and `char_sample.tres`, `trait_sample.tres`, `topic_sample.tres`.
+
+**Tests** (`tests/`): `run_integration.ps1` + `IntegrationBootstrap/DayLoopIntegrationTest`; `run_chunk_tests.ps1` + `ChunkRendererBootstrap/ChunkRendererTest`; `run_chunk_tests_019.ps1` + `ChunkManagerBootstrap/ChunkManagerTest`. All use marker-based pass/fail (`ALL_018_CHECKS_PASSED`, etc.) because the Godot 4.2.1 console exe can exit non-zero under PowerShell on clean runs.
+
+**Input actions:** movement (WASD/arrows/gamepad), `interact` (E), `manual_save` (F5), `manual_load` (F9), `toggle_chunk_grid` (F6).
+
+### 2.3 Acceptance criteria — status
+
+All ten v1 acceptance criteria were verified by ticket 018 and re-verified after tickets 019–020:
+
+1. Full day sequence Period1→…→DayEnd→Save, autosave written — **pass**.
+2. Movement + E + 3–5 pool + resolver + feedback — **pass**.
+3. NPC-initiated interaction fires in free time — **pass**.
+4. Named-slot save/reload restores full state identically (within `.tres` float precision) with template linkage — **pass**.
+5. Valid mod discovered/registered; invalid/missing-dep mod skipped, no crash — **pass**.
+6. `.disabled` marker excludes a mod's resources — **pass**.
+7. Missing template on load is recoverable — **pass**.
+8. `skip()` lands on the next phase boundary — **pass**.
+9. Attendance + grade records exist after a period change — **pass**.
+10. Code documented (script headers + ≥50% function docs) — **pass**.
+
+Chunk-loading verification is additionally covered by ticket 019 (11/11) and 020 (58/58).
+
+## 3. Non-goals for v1 (deferred, not implemented)
+
+Functional main menu / New Game / Load Game UI / Create Menu / Mods Menu / Options Menu; character and map creation tools and the in-game map editor; weekend/season break choice pop-ups; full academic system (only a grade stub); additional languages; audio polish; performance tuning beyond ~5 NPCs (architecture must not preclude 30+); NPC override of existing resource IDs; NPC↔NPC interaction beyond the single-initiator random-pick model; network/HTTP endpoints; disk streaming of far chunks; Options UI for optimization settings.
+
+## 4. Hooks and seams left open for later updates
+
+These are deliberate extension points, not unfinished work. Each is implemented and stable; later features plug into them.
+
+**Day/time (TimeManager):**
+- `advance(delta)` — deterministic clock seam used by all headless tests.
+- `state_changed` signal and the single `_enter_state()` transition point.
+- `skip_simulation_requested(from_state, to_state, skipped_duration)` + configurable skip beat — hook for a future fast-forward/loading UI and for skipped-time simulation; v1 deliberately runs no simulation during skipped class time.
+- `set_stats_provider()` — Callable supplying per-character INT/WIS; v1 uses templates, later tickets inject instance-backed stats.
+- `day_ended` / `manual_save_requested("day_end")` — seam for a future save-prompt UI (no summary screen in v1).
+- `get_day_snapshot()` / `restore_day_snapshot()` — full per-day state (day, phase, elapsed, attendance, grades, roster, player id) for save/resume and future calendar features.
+- `day_started` signal; `set_roster()` override; `BREAK` state with `start_break_day()` / `end_break_day()` / `break_day_started` — foundation for weekend/season break pop-ups (not exercised in v1).
+
+**Modding (ModLoader):**
+- Typed registries + `register_resource()/get_resource()/has_resource()/get_all()/get_registry()` — new content types plug in by adding a bucket.
+- `load_mods(root_path)` public and re-runnable — test seam for synthetic mod trees.
+- `entry` script `register(loader)` hook for mod-specific setup.
+- `get_last_report()` diagnostics (`{mod, status, reason, folder}`) for a future Mods Menu.
+- `mod.json` optional `enabled` flag and `.disabled` marker — file-based enable/disable until a Mods Menu exists.
+- Add-only registration — override support is a future (non-v1) change.
+
+**Characters/instances:**
+- `NpcInstance.snapshot()` / `from_snapshot()` — deep-copy save/restore shape shared by player and NPCs.
+- Runtime-only `tier` and `coarse_position` (excluded from snapshots, recomputed on load) — chunk-loading seam.
+- `goal_destination` in snapshots — restores in-flight AI/class travel.
+- `Npc.simulate_tick(dt, coarse)` + `chunk_managed` flag — fine/far simulation seam; legacy per-frame path preserved for unmanaged instances.
+- `Npc.is_busy()`, `is_conversation_busy()`, `is_forced_destination()`, `set_conversation_busy()`, `resume_saved_goal()` — interaction/travel gating for later AI features.
+
+**AI:**
+- `NpcAi.relationship_candidates()` — defined, returns an empty set in v1; explicit hook for seek-friends/love-interest/avoid-enemy goals once relationship-driven goals are enabled (014/015 populated meters, so this is now data-ready).
+- Seeded `RandomNumberGenerator` by instance hash + period + re-eval counter — deterministic tuning of goal selection.
+
+**Dialogue & interaction:**
+- `DialogueFilter.build_pool()` (seeded, pure), `DialogueResolver.resolve()` (returns one result Dictionary), `NpcInitiation.pick_topic()` — one pair-agnostic pipeline reused by all interaction paths; observable outcome payloads for feedback and future systems.
+- `DialogueTopic.recipient_modifiers` — data-driven recipient trait/stat influence on difficulty and deltas, extensible without code.
+- `Game` signals `dialogue_topic_selected`, `dialogue_resolved`, `npc_interaction_started` — observers can be added without touching resolution.
+- `set_relationship_feedback_enabled()` / `show_relationship_feedback` flag — persisted in saves; a future Options menu can drive it.
+
+**Saves:**
+- `SaveManager.set_state_provider(Callable)` — combining day snapshot with provider payload; no duplicated instance logic in the autoload.
+- `save_slot()/load_slot()/list_slots()/has_slot()/delete_slot()/get_last_saved_slot()` — unlimited named slots for a future Load Game UI; F5/F9 are debug stand-ins.
+- `SaveGame.CURRENT_VERSION` + `is_well_formed()` — forward-compatibility gate; older versions load with a warning, newer are a recoverable error; no migrations yet.
+
+**Rendering / chunks:**
+- `MapRenderer.render(map)`, `get_spawn_point()`, `focus_path`, `update_chunks(world_position)` — map/render seams for new maps and a future editor.
+- `load_radius_chunks` / `unload_radius_chunks` (renderer-owned now; `ChunkManager` may align them later).
+- `Map` chunk helpers (`chunk_pixel_size`, `tile_to_chunk`, `world_to_chunk`, `clamp_chunk`, `chunk_rect`, `get_chunk_count`) + derived grid dimensions.
+- `ChunkConfig` exported radii/tick rates with defaults; `ChunkManager.set_config()/get_config()` — **Options UI wiring for player-tunable optimization is deferred** (config-level support exists).
+- `ChunkGridOverlay.gd` (F6) — reusable, map-driven grid overlay for the deferred map editor; hidden by default.
+- All NPC state in memory; **disk streaming of far chunks deferred**.
+- Far-future target: maps beyond the school for after-school activities (very large maps, 100s of NPCs); tick rates tunable then.
+
+**Navmesh authoring note for future maps:** the debug map uses a hand-authored shared-vertex quad grid (valid; `NavigationServer2D` reads only `vertices`/`polygons`). For larger maps, bake a `NavigationPolygon` from source outlines **through the editor GUI** (`bake()` hung in a headless 4.2.1 probe), then re-run NPC path verification. The debug map is verified and must not be switched to a baked navmesh.
+
+**Testing pattern:** persistent `tests/` bootstraps attached to `/root` from a deferred callback, deterministic clock control via `advance()`, marker-based pass/fail, and RED/GREEN proofs. This is the reference pattern for all later slices.
+
+## 5. Full decision record (from `doc/idea-v1-decisions.md`)
+
+The following is the complete content of `doc/idea-v1-decisions.md` at the end of v1.
+
+---
+
+# Project Renai v1 — Brainstorming Decisions
+
+Companion to `doc/idea-v1.md` (spec) and `doc/idea-v1-brainstorming.md` (design).
+Records the clarification decisions made during the brainstorming session.
+
+## Decisions
+
+### Scope
+- **Middle path:** load-bearing foundations + core loop vertical slice. Surface features (menus, creation tools, mod UI, calendar/break screens) deferred. v1 is a single-day test.
+
+### Approach
+- **Approach A — Data-first vertical slice.** Schemas/registries first, then ModLoader + SaveManager, then one playable day. (Approach B full-scaffold and C throwaway-spike rejected.)
+
+### NPC Data Model
+- **Template + instance.** CharacterTemplate (authored, shared, immutable at runtime) + NpcInstance/PlayerInstance (per-save runtime state: stats deltas, mood, meters, position, schedule progress, goal). Both player and NPCs use the same character base across saves. Instance references template by stable template ID.
+
+### Movement & Maps
+- **Free 2D movement on a tile-based grid.** Collision via Godot physics. Maps are `.tres` resources (tile data + placed objects + spawn + navmesh), edited by an in-game drag-and-drop editor. Renderer builds the world from data.
+
+### Day Structure
+- **Explicit state machine:** Period1 → FreeTime1 → Period2 → FreeTime2 → Period3 → FreeTime3 → Period4 → DayEnd → Save → NextDay. In-school free time between periods = free roam for the player. Weekend/season breaks = choice pop-up (deferred, non-goal for v1).
+
+### NPC AI (free time)
+- **Goal-driven light AI** based on traits, interests, and relationship levels (seek friends/love interests, avoid enemies). Goals → destinations; movement via NavigationAgent2D on baked navmesh. Re-evaluate on period change or goal completion.
+
+### Dialogue
+- **Data-driven `.tres` topics** with conditions (mood/interest/trait/familiarity thresholds, required stat) and effects (affection/familiarity/mood deltas for success/failure). Pool of 3–5 filtered at runtime. Moddable by dropping resources.
+
+### Interaction Resolution
+- **Threshold check:** `stat + (familiarity/10) + random(0..5) >= difficulty` (difficulty per topic, may incorporate recipient stats/traits). Margin scales affection delta severity.
+
+### Relationship Meters
+- **Topic-defined deltas** (affection + familiarity, success/failure variants), with severity varying by interaction with receiver's traits and stats.
+- Meters: Familiarity 0–100, Affection −100..100. Types: Stranger (Fam<20), Friend (Fam>=20 & Aff>=20), Enemy (Aff<=-20), Lover (Fam>=60 & Aff>=60 & mutual orientation/gender).
+
+### Saves
+- **Godot Resource saves** (`.tres`/`.res`), file-based, unlimited slots, `user://`. Instances link to templates via stable template IDs. Autosave + manual. No day-end summary screen.
+
+### Mod Loader
+- **Scan + manifest with dependencies.** Scan `res://mods/`; each mod folder needs `mod.json` (name, version, author, entry script, dependencies list, content list). Validate manifest, entry, and dependencies at startup (topological order, cycle detection). Enable/disable flags. **Add-only** for v1 (no override). On failure, log and skip (no crash).
+
+### Stats & Growth
+- Stats: STR, DEX, CON, INT, WIS, CHA (gate dialogue + affect success). Traits set starting stats + modify growth rates. Growth via break activities + interactions (traits modify rate). Pipeline must exist even in single-day v1.
+
+### Mood
+- Numeric 0–100, clamped. Affects dialogue eligibility and lightly affects stat checks. Updated by interaction outcomes.
+
+### Camera & UI
+- Camera: follow player with smoothing. Minimap for navigation. UI simple but cute. Relationship meter change shown after interaction (toggle, default on).
+
+### Audio & Localization
+- Music + SFX (volume in Options). English only (v1); framework ready.
+
+### Stated implementation calls (builder may refine)
+- Pathfinding: NavigationAgent2D with baked navmesh per map (steering fallback if baking is slow).
+- Interaction trigger: Area2D proximity + E keypress via InteractionComponent.
+- Time: real-time clock in TimeManager driving the state machine; skip advances to next period boundary.
+- Camera smoothing params, goal-selection algorithm, save versioning, dependency resolution algorithm details: left to builder.
+
+### Brainstorming Q&A (builder check)
+
+**Q1 — Launch & entry point (v1):** A. Debug launcher scene `DebugStart.tscn` auto-starts a default day; base resources authored by developer in the Godot editor (plan provides schema + checklist).
+
+**Q2 — NPC-initiated interactions:** B. NPCs can initiate with player OR other NPCs. NPC chooses target by outgoingness + familiarity when not already pursuing a goal; then receives the same filtered dialogue pool as a player and picks one option at random. Pipeline is pair-agnostic `(initiator_id, target_id)`.
+
+**Q3 — Per-period class locations:** A. Per-instance schedule referencing named map markers. Attendance simulated for NPCs (perfect in v1 — their only goal is to attend; no repercussions).
+
+**Q4 — Relationship meter storage:** A. Per-instance directed dictionaries (`meters: { other_id → {familiarity, affection} }`).
+
+### Minor calls (recorded for review)
+- Base content packaging: base resources under `res://resources/` loaded directly; ModLoader exercised by one sample mod under `res://mods/`.
+- Placed map objects: `Item` resource carries a `PackedScene` reference (plus sprite/collider) instantiated by the renderer.
+- NPC attendance (v1): simulated but perfect; no repercussions.
+- NPC-initiated targeting: player or NPC, gated by outgoingness + not-busy.
+
+### to-spec decisions
+- **Exposed endpoints:** Skipped (no network surface); module interfaces documented under Implementation Decisions.
+- **Testing seam:** Highest seam — single integration test at the day-loop level (spawn → move → talk → save → reload) via DebugStart.tscn.
+- **Issue tracker:** GitHub repo created; spec published as an issue with `ready-for-agent` label.
+- **User stories depth:** Extensive — covers movement, interaction, dialogue, relationships, save/load, modding, NPC AI, attendance, mood, stats, camera, minimap.
+
+### to-tickets decisions
+- **Ticket location:** `doc/tickets/` (user-specified; overrides skill's default `.scratch/.../issues/`).
+- **Ticket count:** 18 tickets, finer-grained than the initial 10-ticket proposal.
+- **Granularity:** ~18 tickets accepted by user; each independently shippable and verifiable.
+- **Blocking edges:** Each ticket depends only on tickets that genuinely gate it; parallelizable siblings (004/005/006, all blocked only by 001) can be built concurrently.
+- **Base content authoring (007):** Separate ticket, as requested.
+- **Acceptance verification (018):** Final integration ticket owns verifying all 10 acceptance criteria; each prior ticket also has its own acceptance criteria.
+- **Ticket format:** one file per ticket, named `<NN>-<short-description>.md`, using the local-ticket template (What to build, Blocked by, Status, acceptance criteria checkboxes).
+- **GitHub issues:** 18 issues created (#2–#19) as sub-issues of spec #1, with `ready-for-agent` label and native blocked-by edges. Issue numbers map 001→#2 … 018→#19.
+
+### Chunk loading (planned, post-v1 optimization)
+- **Plan D (hybrid) chosen.** Close tier: full sim + full render. Near tier: full NPC state, reduced tick rate, objects hidden, simplified collision. Far tier: identity preserved, tick rarely with large dt, coarse position, no render, coarse pathfinding.
+
+### Ticket 002 — Autoload skeleton (implementation decisions)
+- **Language:** GDScript for all six stubs (not C#). Keeps the change minimal and avoids C# toolchain/setup; later tickets may migrate individual autoloads to C# where data-heavy, updating the autoload path in `project.godot`.
+- **Location:** `res://scripts/<Name>.gd` (flat, no autoloads subfolder).
+- **Registration:** `[autoload]` section in `project.godot` with the `*` prefix (e.g. `GameManager="*res://scripts/GameManager.gd"`), verified to load and expose each as a global identifier accessible from a scene.
+- **No `class_name`:** Autoload scripts deliberately omit `class_name`. Declaring `class_name GameManager` (matching the autoload name) raises "Class 'GameManager' hides an autoload singleton" and breaks loading. If typed references are needed later, use a distinct class name.
+- **Chunk:** fixed tile grid, same size/shape across maps (map dimensions vary).
+- **Center of loading:** player position, with buffer for pop-in prevention.
+- **Tier distances:** chunk-radius based, configurable by player (optimization setting), with sensible defaults. Close radius 2, near radius 4, far beyond.
+- **Hysteresis:** promote at inner radius, demote at outer radius + 1 chunk buffer. Promotion interpolates position over ~0.5s.
+- **Far-NPC fidelity:** keep full identity/state (no zone abstraction); tick every ~5–10s with large dt; coarse (straight-line) pathfinding.
+- **Interaction guard:** only close-tier NPCs interactable; attempting to interact with a near NPC promotes it first (safety net for tier-update lag, small close radius, NPC-initiated, zoomed-out camera).
+- **Memory:** all NPC state in memory (v1); disk streaming deferred.
+- **Save/load:** store all NPC state; tiers recomputed from player spawn position on load.
+- **Scale target:** future very-large maps + 100s of NPCs (after-school activities); rates tunable then.
+- **Config:** tier radii and tick rates as settings (Options UI wiring deferred; config-level support in ChunkManager).
+- **Map editor:** chunks auto-derived from map dimensions + chunk size; editor shows chunk grid overlay.
+
+### Ticket 003 — DebugStart launcher (implementation decisions)
+- **Game.tscn handling:** A minimal placeholder `scenes/Game.tscn` (Node2D root) is created now so DebugStart can load it without errors; later tickets (map renderer, movement, etc.) populate it.
+- **Fresh-start path:** GameManager owns the fresh-start (no save) path. `start_fresh_day()` sets `current_save = null` and defers `change_scene("res://scenes/Game.tscn")`. The scene change is deferred (`call_deferred`) so it is safe to invoke from `_ready()` without triggering "parent node is busy" errors.
+- **Entry point:** `run/main_scene` in `project.godot` points to `res://scenes/DebugStart.tscn`, so the project launches straight into the debug launcher with no menu flow.
+- **DebugStart scene:** `scenes/DebugStart.tscn` (Node root) with `scripts/DebugStart.gd`, which delegates to `GameManager.start_fresh_day()` rather than switching scenes itself.
+- **Autoloads:** remain stubs; none assume a save exists, so a fresh start does not crash. `GameManager.current_save == null` denotes "no save / fresh start".
+
+### Ticket 006 — DialogueTopic schema (implementation decisions)
+- **File:** `res://scripts/DialogueTopic.gd`, `class_name DialogueTopic extends Resource`.
+- **Identity fields:** `id: String`, `text: String`.
+- **Condition fields (eligibility):** `min_mood: int` (0 = no gate), `min_familiarity: int` (0 = no gate), `min_affection: int` (0 = no gate), `required_interests: PackedStringArray`, `required_traits: PackedStringArray`, `required_stat: String` (stat name; empty = none), `required_stat_min: int` (ignored when `required_stat` is empty). All conditions must pass for eligibility.
+- **Resolution fields:** `checked_stat: String` (stat used in `stat + (familiarity/10) + random(0..5) >= difficulty`; empty = no stat bonus), `difficulty: int`.
+- **Deltas:** separate success/failure variants for affection, familiarity, and mood — `affection_delta_success/failure`, `familiarity_delta_success/failure`, `mood_delta_success/failure` (all `int`). All deltas are applied to both parties' directed meters by the resolution ticket (015).
+- **Types:** free-form strings for stat/interest/trait ids (consistent with CharacterTemplate/Trait), matching the modding convention; meters are integers so deltas are ints.
+- **Margin scaling:** handled by the resolution step (ticket 015), not the schema.
+- **Verification:** `DialogueTopic.new()` instantiates and `ResourceSaver.save` + `ResourceLoader.load` round-trips all fields; registered in the global script class cache so it appears in the editor's "New Resource" dialog.
+
+### Ticket 008 — Map renderer (implementation decisions)
+- **File:** `res://scripts/MapRenderer.gd`, `class_name MapRenderer extends Node2D`.
+- **Entry point:** exported `map: Map`; `render(map)` builds (or rebuilds) the world and is also called from `_ready()` when `map` is assigned. `Game.tscn` now contains a `MapRenderer` child wired to `map_school.tres`.
+- **Tilemap:** a `TileMap` named "TileMap". Uses `map.tile_set` when provided; otherwise generates a fallback `TileSet` (one grey tile, `tile_size` from map) so maps without an authored tileset still render. Cells set from flat row-major `tile_ids` (-1 clears).
+- **Placed objects:** a `Node2D` named "PlacedObjects" with one child per `placed_objects` entry, instantiated from `item.packed_scene` (or a bare `Node2D` when missing). Position taken from the entry's `position`. Sprite/collider data from `Item` is applied (Sprite2D from `sprite` or a type-colored placeholder; StaticBody2D + CollisionShape2D when `blocks_movement`, using `collider_shape` or a default rectangle).
+- **Navigation:** a `NavigationRegion2D` named "NavigationRegion2D" with `navigation_polygon = map.navigation_mesh`.
+- **Spawn point:** exposed as `spawn_point: Vector2` and `get_spawn_point()`, plus a `Marker2D` named "SpawnPoint" at that position.
+- **Empty maps:** renders tilemap + (empty) PlacedObjects + nav region + spawn marker without errors.
+
+### Ticket 005 — Item + Map schemas (implementation decisions)
+- **Item fields:** `id`, `type`, `packed_scene: PackedScene`, sprite data (`sprite`, `sprite_offset`, `sprite_scale`), collider data (`collider_shape`, `collider_offset`), and furniture/wall properties (`blocks_movement`, `blocks_sight`, `interactable`, plus free-form `properties: Dictionary`).
+- **Map tile data:** `width`, `height`, `tile_size`, optional `tile_set`, and a flat row-major `tile_ids: PackedInt32Array` (-1 = empty).
+- **Placed objects:** `placed_objects: Array` of dictionaries `{ "position": Vector2, "item": Item }`, instantiated by the renderer from each item's `packed_scene`.
+- **Spawn point:** `spawn_point: Vector2` (world space).
+- **Navigation mesh:** `navigation_mesh: NavigationPolygon`.
+- **Chunk seams:** `chunk_size: int = 32`; derived read-only `chunk_grid_width`, `chunk_grid_height`, `chunk_grid_size` (ceil division, 0 when size <= 0 or dimension <= 0).
+- **Map identity:** `id`, `display_name` for registry/mod linkage.
+
+### Ticket 009 — Free 2D movement + collision + camera + minimap (implementation decisions)
+- **Player controller:** `scripts/Player.gd`, `class_name Player extends CharacterBody2D`. Circular collider (radius 6), `move_and_slide()` in `_physics_process`, velocity steered with `move_toward` toward `Input.get_vector("move_left", "move_right", "move_up", "move_down")` × `speed` for smooth analog response. Player spawns at the MapRenderer's `get_spawn_point()` via a deferred lookup in `_ready()` (survives sibling ready-order). Player is in group `player` for the future InteractionComponent. Visual is a generated `_draw()` circle (no art assets in v1).
+- **Input:** four actions (`move_left`, `move_right`, `move_up`, `move_down`) defined in `project.godot` `[input]`, each with WASD + arrow keys (digital) and gamepad left-stick/d-pad events (analog). `Input.get_vector` normalizes diagonals and supports gamepad sticks. A defensive runtime `InputMap` registration in `Player._ready()` fills in any action missing from ProjectSettings.
+- **Collision:** reuse the `StaticBody2D` + `CollisionShape2D` nodes MapRenderer already creates for items with `blocks_movement` (all three base items set it). Player uses default collision layer/mask 1; no new physics layers. A straight-line physics move is sufficient; no tile-by-tile snapping.
+- **Camera (user-approved):** `scripts/FollowCamera.gd`, `class_name FollowCamera extends Camera2D`. The camera is a **child of Player** in `Game.tscn`, so it inherits the player transform and Camera2D's built-in `position_smoothing_enabled` / `position_smoothing_speed` (~10) supplies the follow lag. Do **not** write `global_position` from a script every frame while smoothing is enabled. Exported `zoom_level` originally defaulted to **8** (zoom in) for the tiny 160×128 map; it is now **4** (user-approved final value) so more of the larger map is visible while follow stays observable. Tunable in-editor; the scene value in `Game.tscn` overrides the script default, so both are set to 4.
+- **Camera limits — corrected after user-visual testing:** limits are the map's **raw pixel bounds** (`0 .. width*tile_size`, `0 .. height*tile_size`), `limit_smoothed = true`, recomputed on map swap. An earlier "view-aware" inset (subtracting half the zoomed viewport) was wrong: Godot already accounts for viewport and zoom when clamping, so the inset collapsed the limit range to 16 px and made the camera drift **opposite** to the player at a real 1152×648 viewport. Regression check at that viewport: world-space screen center moves `69.5 → 79.2` as the player moves `56 → 86.7`, and caps at `88.0` (no view past the map edge). Original 64×64 headless viewport hid the bug; subsequent verification uses a realistic viewport size.
+- **Camera jitter fix (user-reported blur):** Camera2D built-in position smoothing was **disabled**; smoothing is now done manually in `FollowCamera._physics_process` with `1 - exp(-speed * delta)` and applied as the camera's local offset (`smooth_world - player_world`). The player moves in physics ticks too, so both update in lockstep; previously the camera interpolated every render frame while the player stepped, producing a ~14 px sawtooth (visible blur/oscillation at 8× zoom). Measured: steady-state player-to-camera offset changes by at most **0.29 px** after convergence. Enabling `physics/common/physics_interpolation` was tested and did not remove the headless sawtooth, so it was not kept.
+- **Minimap (user-approved):** `scripts/Minimap.gd`, `class_name Minimap extends Control`, drawn data-first via `_draw()` — not a second viewport. Reads `Map.tile_ids` for floor squares, `placed_objects` with `item.blocks_movement` for wall/furniture blocks, and the player's `global_position` for a dot; uniformly scaled to fit a fixed top-right panel. `queue_redraw()` only when the player moves past a small threshold or the map changes, keeping cost negligible at 60 fps. NPC dots can be added later by reading NPC positions, with no scene/viewport changes.
+- **Scene wiring:** `Game.tscn` gains `Player` (with CircleShape2D), `FollowCamera`, and `MinimapLayer`/`Minimap`; exported `NodePath`s wire camera/minimap to Player and MapRenderer. MapRenderer needed no changes.
+- **Spawn-point fix (discovered during verification):** the authored spawn `(24, 24)` sat on the corner of the desk collider at `(32, 32)` (rect x 24–40, y 24–40), so the radius-6 player was pushed to `x≈18` on load and immediately blocked from moving right. `map_school.tres` `spawn_point` was moved to **`(56, 24)`**, an open tile inside the navmesh. No other map data changed.
+- **Verification:** headless Godot 4.2.1 script asserts player moves on input, is blocked by a wall/desk, camera follows with correct zoom/limits, minimap draws without errors, and the default map loads with no parse/runtime errors; plus a user-visual check of motion smoothness.
+
+### Ticket 010 — ModLoader (implementation decisions)
+- **Registry ownership:** `ModLoader` (autoload) owns the ID→resource registries; no new autoload is added. Registries are typed buckets keyed by resource class (`character`, `trait`, `item`, `map`, `dialogue`) mapping stable `id` → `Resource`, exposed via `register_resource()`, `get_resource()`, `has_resource()`, `get_all()`, and `get_registry()`. This follows the spec (§5.2/§5.4: "ModLoader maintains an ID→resource registry") and avoids `project.godot` churn.
+- **Type detection:** a content resource is bucketed by its class (`CharacterTemplate`, `Trait`, `Item`, `Map`, `DialogueTopic` via `is` checks); unsupported classes or empty `id` are logged and skipped.
+- **Mod id:** the `id` field in `mod.json` when present and non-empty; otherwise the folder name. Dependencies reference these ids. Duplicate ids are logged and the later mod is skipped.
+- **Manifest contract:** required fields `name`, `version`, `author` (non-empty strings), `entry` (non-empty script path), `dependencies` (array of strings), `content` (array of resource paths). Optional `id` (string) and `enabled` (bool, default `true`). Missing/wrong-typed required fields cause a logged skip.
+- **Enable/disable:** a mod is disabled when `enabled` is `false` in `mod.json` or when a `.disabled` marker file exists in its folder. v1 has no Mods Menu, so the flag is file-based (spec §5.5). Disabled mods are skipped and do not count as satisfied dependencies.
+- **Entry script contract:** `entry` must point to a loadable GDScript that instantiates (v1 convention: `extends RefCounted`). After the mod's `content` resources are loaded and registered, ModLoader instantiates the script and calls `register(loader)` if that method exists, for mod-specific setup. A missing/unloadable/instantiation-failing entry causes the mod to be skipped with a log, no crash.
+- **Content loading:** every path in `content` is loaded with `ResourceLoader` and auto-registered by type/id; a single unloadable content resource is logged and skipped without failing the whole mod.
+- **Dependency resolution:** Kahn topological sort over the discovered mod ids; mods left unprocessed after the sort form or depend on a dependency cycle and are logged and rejected. A dependency that is missing, invalid, disabled, or skipped causes the dependent mod to be skipped with a clear log.
+- **Add-only:** registering an id that already exists is logged and rejected (no override), per the v1 non-goal.
+- **Testability seam:** `load_mods(root_path := "res://mods/")` is public and re-runnable (clears state first), so headless tests can point it at a synthetic mod tree under `user://` to exercise failure paths without touching real content.
+- **Re-entrancy guard:** `load_mods()` ignores re-entrant calls while a load is in progress. Entry hooks receive the loader as `register(loader)`, so without the guard a mod could clear registries mid-load and cause false "missing dependency" skips for later mods.
+- **Diagnostics schema:** `get_last_report()` entries are `{ mod, status, reason, folder }`. Discovery-stage skips key `mod` by folder name (the fallback id); duplicate-id skips use a composite `id@folder` key so they cannot collide with the surviving mod's `loaded` entry. Cycle diagnostics phrase the reason as "member or dependent" because Kahn's leftover set includes both cycle members and their dependents.
+
+### Ticket 011 — Day state machine (implementation decisions)
+- **Approach A — state machine inside TimeManager (chosen).** Matches the spec ("TimeManager — day clock … drives the day state machine"), one file, simplest seam. A separate `DayStateMachine` class and Timer nodes per phase were rejected (no v1 consumer / drift + scene wiring).
+- **Clock:** `_process(delta)` calls public `advance(delta)`, which accumulates real-time seconds and transitions when the phase duration is reached. Durations are exported/tunable (defaults 45 s class, 30 s free time, ~1 s for DayEnd/Save/NextDay). `advance()` is the deterministic headless-test seam; no wall-clock/calendar in v1.
+- **Single transition point:** `_enter_state(next)` emits `state_changed`; leaving a `PERIODx` calls `_record_period(period)`. Natural completion and `skip()` share this path so a skipped class is still recorded (user-confirmed: "count every period").
+- **Skip semantics (with user-approved seam):** `skip()` emits `skip_simulation_requested(from_state, to_state, skipped_duration)` and holds a short, configurable pause beat (`skip_pause_sec`, default ~0.5 s, clock halted) before force-completing the current phase (firing period-change logic if it is a class) and entering the next state with elapsed reset. "No simulation in skipped class time" means no intermediate ticks/AI/movement — the signal + beat are a hook for tickets 013/016 and the deferred loading UI to run fast-forward later, not simulation implemented in 011. Re-entrant skips while a beat is pending are ignored.
+- **Attendance + grade data model:** self-contained records in `TimeManager` keyed by period then character id (user-confirmed). No `NpcInstance`/`PlayerInstance` introduced in 011 (those are 012+). NPC attendance is perfect (always `true`). Roster is settable via `set_roster()`; default falls back to `ModLoader` character ids so NPC attendance is observable without hard-coded ids. **Ticket 012 must pass stable instance ids (not template ids) to `set_roster()`** — records are keyed by id and duplicate ids collapse.
+- **Stats provider seam:** a `Callable` set via `set_stats_provider()` returns `{intelligence, wisdom}` per character id; default reads `CharacterTemplate` INT/WIS from the ModLoader registry (player maps via `player_template_id`). Because base characters live in `res://resources/` and are not in the ModLoader registry, the player also has an exported `player_template_path` (default `res://resources/characters/char_alex.tres`) loaded directly as a fallback. Later tickets inject instance-backed stats. `_player_id` is initialized from the exported `player_character_id` in `_ready()`; `set_roster()` is the explicit override.
+- **Grade stub formula:** when present, `score = clampi(60 + (int+wis)/2, 0, 100)`, `bonus = clampi(1 + (int+wis)/20, 0, 3)` (both 0 when absent); letter is derived from score. Constants exported/tunable. `get_stat_bonuses()` returns per-id sums across periods for tickets 015/018 to apply.
+- **DayEnd save seam (user-confirmed):** TimeManager emits `day_ended` + `manual_save_requested("day_end")` and calls a guarded `SaveManager.autosave(snapshot)` hook. `TimeManager.get_day_snapshot()` / `restore_day_snapshot()` expose day, state, elapsed, attendance, grades, roster, player id and absence flag so ticket 017 can persist and resume a day; `SaveManager.gd` gains a log-only `autosave(snapshot)` stub now. No save logic duplicated in 011, no day-end summary screen.
+- **Break days:** `BREAK` is a separate enum state with `start_break_day()`/`end_break_day()` and a `break_day_started` signal; deliberately outside the normal sequence and not exercised in v1.
+- **Day loop:** after `SAVE`, `NEXTDAY` increments the day counter, clears the per-day records, and re-enters `PERIOD1`, so the sequence is repeatable. `day_started` is emitted on `PERIOD1` entry for both fresh starts and rollovers. Fresh-start wiring: `GameManager.start_fresh_day()` only clears the save and switches to `Game.tscn`; the new `Game.gd` root script calls `TimeManager.start_day(1)` in its own `_ready()` so scene-level listeners are connected first. Entering `BREAK` records an interrupted class and resumes at the following phase on exit.
+
+### Ticket 012 — NPC spawning & scheduling (implementation decisions)
+- **Base templates registered into the ModLoader registry (user-approved).** `load_mods()` registers all `res://resources/characters/*.tres` base `CharacterTemplate`s first (bucket `character`, owner `"base"`), then mod content. This makes the ticket's "spawn via the ModLoader registry" literal: the spawner resolves template IDs only through `ModLoader.get_resource()`. Base registration is re-run on every `load_mods()` so re-scans (e.g. headless tests) restore it; a mod ID colliding with a base ID is rejected add-only, so mods cannot silently override base templates.
+- **Named class markers live on the `Map` resource (user-approved).** Added `@export var markers: Dictionary` mapping a stable marker name (e.g. `"classroom_a"`) to a world-space `Vector2`, authored in `map_school.tres`. `Map.get_marker(name)`, `has_marker(name)` and `get_marker_names()` are the read API; schedules store marker *names*, not positions, so moving a marker updates every NPC.
+- **Period transitions reposition NPCs instantly (user-approved in 012, SUPERSEDED).** Originally each NPC's `position` and node `global_position` were set directly to its scheduled marker on class entry. **Overturned by the user after ticket 013:** now that `NavigationAgent2D` exists, NPCs walk to class; see the "Ticket 013 — class travel" section below. The hard-snap fallback remains for skipped transitions.
+- **Instance shape: a single `NpcInstance` Resource (user-approved).** `scripts/NpcInstance.gd` (`class_name NpcInstance extends Resource`) carries every instance field: `instance_id` (stable roster id), `template_id`, `display_name`, `stats`, `mood`, directed `meters`, per-period `schedule`, `position`, `current_goal`, and runtime-only `tier` (default `"close"`). The player will reuse this same shape in later tickets; a separate `PlayerInstance` class is not introduced in 012.
+- **`tier` is runtime-only.** It is an unexported `var tier: String = "close"` with the `close`/`near`/`far` constants kept on the class for post-v1 chunk loading. Ticket 017 must exclude it from serialization (it is recomputed on load per the chunk-loading plan).
+- **NPC roster uses stable instance IDs.** `Game.gd` calls `TimeManager.set_roster("player", [instance_id, ...])` with ids like `npc:0`, and installs a stats provider backed by each `NpcInstance.stats`, so attendance/grade records are per-NPC and do not collapse when two NPCs share a template.
+- **Attendance stays in TimeManager's per-period records.** No attendance field is duplicated onto `NpcInstance`; `TimeManager.get_attendance()[period][instance_id]` is the authoritative record, matching the ticket 011 decision that records are self-contained and keyed by id.
+- **Default schedules are deterministic.** Each NPC's period→marker schedule rotates through the map's sorted marker names by NPC index, so 4 NPCs distribute across 4 classrooms rather than stacking. A map with no markers falls back to its spawn point with a warning (no crash).
+- **Missing template is recoverable.** If `ModLoader.get_resource()` returns null for a requested template ID, the spawner logs a warning, records the failure in a diagnostic array (`get_last_report()`), skips only that NPC, and continues spawning the rest — no crash, consistent with spec acceptance criterion 7.
+- **Scaffold NPCs are `CharacterBody2D` nodes.** `scripts/Npc.gd` (`class_name Npc`) holds an `NpcInstance`, draws a generated coloured circle, and joins group `npc`. A collider is included now so ticket 013 can add `NavigationAgent2D` movement without changing the node type.
+- **Three extra base character templates authored** (`char_jordan.tres`, `char_riley.tres`, `char_taylor.tres`) so 4 NPCs spawn from 4 distinct authored templates regardless of mod enable/disable state, without using the player's `char:alex` template. The sample mod's `char:mod_sample` stays registered as an optional extra.
+- **Player template excluded from the default roster fallback (review fix):** `TimeManager._ensure_roster()` now skips `player_template_id` and the template at `player_template_path`, so registering base characters cannot create a phantom `char:alex` attendance record on paths that omit `set_roster()`.
+
+### Ticket 013 — NPC goal-driven AI (implementation decisions)
+- **Hangout destinations are named map markers (user-approved).** Dedicated `hangout_*` markers are authored in `map_school.tres`, kept distinct from the four `classroom_*` schedule markers. Free-time goals target a hangout marker name resolved through `Map.get_marker(name)`; positions can be moved in the map resource without touching AI code. Class markers remain schedule-only.
+- **Interest → hangout tagging (user-approved).** `Map` gains `hangout_interests: Dictionary` mapping a hangout marker name to a `PackedStringArray` of interest ids/tags (e.g. `trait:likes_sports` and/or `sports`). Matching hangouts are weighted higher during goal selection. Preference keys come from all trait categories except `dislike` (review fix #1): the authored roster expresses preferences through `skill` and `personality` traits as well (Riley's studious → `academic`/`study`, Taylor's outgoing → `social`), so all four hangouts are reachable; an `interest`-only filter left 2 of 4 NPCs with no preferences. Mood biases the weighting: low mood favours `quiet`-tagged hangouts, high mood favours preference-matched ones.
+- **Relationship-driven goals deferred (user-approved).** Seek-friends/love-interest and avoid-enemy goals are NOT implemented in 013: directed `meters` are empty until dialogue tickets 014/015 populate them. 013 implements interest + mood goals only and exposes a documented relationship-candidate hook in `NpcAi` that returns an empty set in v1, so 014/015 can add seek/avoid without restructuring. NOTE: this narrows ticket-013 checkbox #1 relative to its original wording ("interests, mood, and relationship meters"); the deferral is explicit and user-approved.
+- **Seeded determinism (user-approved).** Goal selection uses a `RandomNumberGenerator` seeded by `instance_id.hash()` combined with the period and a re-evaluation counter, so re-evaluations within a period are reproducible and headless verification is stable. Global `randi()` is not used.
+- **Separation of concerns (builder call).** Pure goal selection lives in `scripts/NpcAi.gd` (`RefCounted`), taking an `NpcInstance`, its resolved `CharacterTemplate`, a `Map`, and the period, and returning a goal string plus destination. `scripts/Npc.gd` owns the `NavigationAgent2D` and physics-tick movement. `Game.gd` enables AI on `FREETIME*` entry and disables/clears it on class entry (relying on 012's instant repositioning).
+- **Goal representation (builder call).** `NpcInstance.current_goal` holds a structured string (`"hangout:<marker_name>"`, empty when idle). A new exported `goal_destination: Vector2` on `NpcInstance` stores the chosen destination and is included in `snapshot()`/`from_snapshot()` so ticket 017 can restore in-flight goals.
+- **Stall / stuck handling (builder call).** Each movement attempt has a timeout. If the nav path is empty/unreachable or the NPC makes no progress, it falls back to straight-line steering toward the destination, then re-evaluates the goal rather than freezing. The no-progress flag is persistent (`_force_fallback`) because a merely "usable" nav path must not erase a detected stall (review fix #2). Verification found that the hand-authored `map_school.tres` navmesh `polygons` overlap the bench/desk physics colliders (the `outlines` hole is re-bake source data only), so straight-line steering pinned two NPCs against the bench; `Npc.gd` also detects slide collisions and steers along the collider tangent (goal-aligned) for a short beat before resuming the nav path. Re-baking the navmesh against furniture is a follow-up data task, not required for v1.
+- **Ticket 016 seam (builder call).** `Npc` exposes `is_busy()` (true while pursuing a goal); NPC-initiated interaction targeting uses it as the "not-busy" gate. 013 does not implement initiation or dialogue.
+- **Non-free-time states stop AI (review fix #4).** `Game._on_state_changed()` disables AI for every state that is not `FREETIME*`, including BREAK, DAYEND and IDLE — a `period <= 0` early return would otherwise leave NPCs moving while the clock is paused.
+- **Review follow-ups left open:** ticket-017 restore must explicitly re-enable AI (no `state_changed` fires on `restore_day_snapshot()`) and apply `goal_destination` to the nav agent; `_is_free_time_state()` should use the signal's state argument; `NpcAi.relationship_candidates()` is defined but not yet wired into selection (tickets 014/015). These are recorded in `doc/code-review/codereview-ticket-013-npc-goal-driven-ai.md` findings 3, 5 and 6.
+
+### Ticket 013 — class travel (user-approved change; supersedes 012 instant reposition)
+- **NPCs walk to class instead of teleporting (user-approved).** After the pathfinding from ticket 013, the user overturned the 012 decision that class transitions hard-snap NPCs to their markers. NPCs may now be late to attendance in principle; they are given enough lead time to arrive before the end-of-class attendance check. The lead/timeout defaults were raised (8 s / 14 s) for the larger debug map's longer walks.
+- **Departure timing (builder call).** `Game.gd` checks the remaining free-time duration each frame and, when `class_travel_lead_sec` (default 4 s) or less remains, points each NPC's existing `NavigationAgent2D` at its scheduled class marker with a forced `class:<marker>` goal. No new `TimeManager` states were added, so ticket 011's approved day sequence and persisted state enum are unchanged. An alternative — inserting short TRAVEL phases before each class — was rejected as more invasive for the same result.
+- **Skip still hard-snaps (user-confirmed contract).** `TimeManager.skip()` emits `skip_simulation_requested`, which `Game.gd` records; the following class transition calls `set_ai_enabled(false)` + `move_to(marker)` instead of simulating the walk, preserving "no simulation in skipped class time".
+- **Arrival guarantees (builder call).** Forced travel reuses the 013 navigation/obstacle-sliding/stall-recovery path but adds a hard `travel_timeout_sec` (default 14 s; raised from 8 s for the larger debug map) so an oscillating path cannot leave an NPC wandering; on expiry (or on stall/arrival) the body snaps exactly onto the marker and stops. Travel can be cancelled by BREAK/DAYEND and resumed from a save via `Npc.resume_saved_goal()` (a `class:` goal in `NpcInstance.current_goal` is restored into forced mode by `setup()`).
+
+### Larger debug map (user-approved)
+- **Replacement debug map (user-approved).** `resources/maps/map_school.tres` is now a **32×24 tile / 512×384 px** map (`map:school_debug_large`), replacing the 10×8 / 160×128 map so classroom and hangout markers are visibly separated (opposite classrooms ~417 px apart vs. ~60 px before). The original is preserved as `resources/maps/map_school_small.tres`; `Game.tscn` still points at `map_school.tres`.
+- **Layout (builder call).** Classrooms at the four corners; hangouts at top-centre, bottom-centre, left-centre and right-centre; spawn at (256,192). Ten desk/bench obstacles form navmesh holes. The navmesh is a shared-vertex quad grid (713 vertices, 650 convex quads) authored directly — `NavigationPolygon.bake()` hangs in headless Godot 4.2.1, so no runtime baking is used.
+- **Zoom changed to 4× (user-approved; final).** `FollowCamera.zoom_level` was reduced from 8 to 4 in both `scripts/FollowCamera.gd` and `scenes/Game.tscn` so multiple landmarks are visible at once on the larger map.
+- **Travel timing (builder call).** `class_travel_lead_sec` 4→8 s and `travel_timeout_sec` 8→14 s accommodate walks of up to ~9 s on the larger map.
+- **Navmesh authoring note for future maps (user-approved: keep as-is for this debug map).** The hand-authored quad grid is valid pathfinding data — `NavigationServer2D` only reads `vertices`/`polygons`, so how they were produced is invisible to it — and all NPC paths verified on it. For larger or more complete maps, prefer baking a `NavigationPolygon` from source outlines: it yields far fewer polygons, a much smaller `.tres`, accurate arbitrary-shaped holes around colliders, and can be re-baked in the editor when geometry changes; it also gives more direct paths (a grid can stair-step, and `NavigationAgent2D` does not smooth paths in 4.2). Caveat: `NavigationPolygon.bake()` hung in a headless 4.2.1 probe, so bake through the editor GUI (or a region attached to a live scene tree), then re-run the NPC path verification after regenerating. Do not switch this debug map: it is verified and debug-only.
+
+### Ticket 014 — Dialogue filtering + pool + player trigger (implementation decisions)
+- **Approach A — pure filter helper + Area2D component + thin scene wiring (chosen).** `DialogueFilter` (RefCounted, static methods) evaluates conditions and builds the pool; an `InteractionComponent` (Area2D child of Player) detects nearby NPCs and the `interact` keypress; a `DialoguePoolUI` node displays options; `Game.gd` only wires them together. Embedding eligibility inside each `.tres` script (data-coupled, untestable) and doing all filtering inline in `Game.gd` (no reusable seam for 016) were rejected.
+- **Base dialogue topics registered as base content.** `ModLoader._register_base_content()` now also registers `res://resources/dialogue/*.tres` into `TYPE_DIALOGUE` with owner `"base"`, on every `load_mods()` — parallel to base characters. The two authored topics and the sample mod topic are then all available through one registry path. Add-only rules still apply.
+- **Player state reuses the `NpcInstance` shape.** `Game.gd` builds an `NpcInstance` with `instance_id = "player"` (TimeManager's player id), a template resolved via `TimeManager.player_template_id` → `char:alex` → `player_template_path`, and authored starting stats/mood. No separate `PlayerInstance` class in 014; ticket 017 persists this instance. Both sides of the pipeline are the same shape, keeping it pair-agnostic.
+- **Condition semantics.** `min_mood` applies to the initiator's `mood`. `min_familiarity` / `min_affection` are read from the initiator's directed meter toward the target via a read-only lookup (filtering must never create or mutate a meter — 015 owns deltas). `required_interests` / `required_traits`: every listed id must appear in the union of both parties' template trait ids *and* trait tags (Trait resources or plain-string entries); a missing template contributes no keys, so such a topic fails closed. `required_stat` / `required_stat_min` apply to the initiator's current stats only. All conditions must pass.
+- **Pool construction.** `DialogueFilter.build_pool()` collects eligible topics from `ModLoader.get_all(TYPE_DIALOGUE)`, shuffles them with a seeded `RandomNumberGenerator` (explicit seed parameter for headless tests; tick-based seed in play), and takes `clampi(randi_range(3, 5), 1, eligible.size())` topics. Zero eligible → empty pool, no crash. Fewer than 3 eligible → use what exists.
+- **UI.** A `CanvasLayer`/`Control` `DialoguePoolUI` shows up to five topic buttons plus an explicit **Cancel** button; number keys 1–5, Esc and mouse clicks are accepted. It also shows a short "No appropriate topics right now." fallback when the pool is empty. Selection emits `topic_selected(topic, initiator_id, target_id)`; Cancel/fallback emits `cancelled`.
+- **World behaviour (user-specified).** While the pool is open the day clock and all other NPCs keep running. The player is input-locked (movement and repeated E ignored) until the interaction ends via selection or Cancel. The target NPC is frozen in place and flagged busy **without clearing its active goal or nav target** so it resumes afterwards; `Npc.is_busy()` now covers conversation-busy as well as active goals, and `Npc.is_conversation_busy()` is exposed for ticket 016's "don't start a conversation with someone already talking" gate.
+- **Trigger timing (user-specified).** A new `interact` input action (E key, plus a gamepad button fallback) drives the Area2D proximity trigger. It is **not** gated to `FREETIME*` states: E works any time an NPC is in proximity, per the ticket wording.
+- **Resolution seam (015).** `Game.gd` emits `dialogue_topic_selected(topic, initiator_id, target_id)` on selection and applies no deltas, no stat roll and no meter changes in 014. `DialogueTopic`'s checked stat, difficulty and delta fields remain untouched until 015.
+- **Review fixes (recorded 2026-11-23).** Five findings from `doc/code-review/codereview-ticket-014-dialogue-filtering-pool-trigger.md` were fixed: emit the selection signal before closing/unlocking; defer a class hard-snap requested for a conversation-frozen NPC until release; register the player instance in `Game._instances_by_id` so both ids resolve; enforce negative `min_affection` thresholds (`!= 0`); and null-safe seeding in `DialogueFilter.build_pool()` for 016. Re-verified at 61/61 headless checks.
+
+### Ticket 015 — Threshold resolution + deltas + meters + feedback (implementation decisions)
+- **Approach A — pure resolver + thin wiring + small feedback panel (chosen).** `DialogueResolver` (RefCounted, static methods) owns the roll, scaling, deltas, clamping and relationship derivation; `Game.gd` connects to its own `dialogue_topic_selected` signal, applies nothing itself, and shows feedback. Embedding resolution in `Game.gd` and putting it inside `DialogueTopic` were rejected (untestable seam / data becomes code). Mirrors ticket 014's `DialogueFilter` pattern so 016 gets one pair-agnostic seam.
+- **Threshold check:** `roll = initiator.get_stat(topic.checked_stat) + (initiator's directed familiarity toward target / 10) + rng.randi_range(0, 5)`; `margin = roll - effective_difficulty`; success when `margin >= 0`. Empty `checked_stat` contributes 0. `seed_value >= 0` makes the roll deterministic for headless tests; play passes a tick-derived seed. Familiarity is read from the initiator's directed meter (same source as 014's filter).
+- **Margin scaling — bounded multiplicative (user-approved):** `margin_scale = clampf(1.0 + absf(margin) / 5.0, 1.0, 2.0)`, applied to the affection delta only. Base delta keeps its sign, so a larger miss hurts more and a larger win rewards more; the ×2 cap prevents runaway swings. Familiarity/mood deltas are not margin-scaled.
+- **Recipient influence — adjust difficulty AND received delta (user-approved).** No hardcoded heuristic: `DialogueTopic` gains `@export var recipient_modifiers: Array` of `{ id, kind, min, difficulty, delta_scale }` dictionaries. `kind="trait"` matches when `id` is in the recipient template's trait ids/tags (same key set as `DialogueFilter`); `kind="stat"` matches when `recipient.get_stat(id) >= min`. Each match adds `difficulty` to the effective difficulty and multiplies the recipient's `delta_scale` into every delta that party receives. Combined scale is clamped to 0.25–2.0. Empty modifier list → authored difficulty and verbatim deltas (existing topics keep their behaviour). `topic_compliment.tres` gains one `trait:outgoing` modifier so the seam is exercised in the playable slice.
+- **Delta application:** initiator's meter toward target and target's meter toward initiator both receive the affection/familiarity delta; both instances' global `mood` receives its delta. Initiator deltas use `margin_scale` only; recipient deltas also use `recipient_scale`. Clamps: Familiarity 0–100, Affection −100..100, Mood 0–100. Resolution creates missing meters (filtering still never does).
+- **Relationship types — five types (user-approved).** Adds `Acquaintance` to Stranger/Friend/Enemy/Lover for the decided gap (Fam ≥ 20 with Aff in −19..19). Derived on demand (no new persisted field): Lover (Fam ≥ 60 & Aff ≥ 60 & mutual orientation/gender), else Enemy (Aff ≤ −20), else Friend (Fam ≥ 20 & Aff ≥ 20), else Acquaintance (Fam ≥ 20), else Stranger. A high-meter pair that fails the mutual romance gate falls through to Friend — rejection is possible. Orientation gate: `hetero` accepts a different gender, `homo` the same, `bi`/`bisexual` either, `none`/unknown fails closed. Both templates must resolve for Lover.
+- **Feedback UI (builder call; spec left specifics open).** New `InteractionFeedbackUI` (Control under a `CanvasLayer`) shows Success/Failure, the topic text, the roll breakdown, before→after Familiarity/Affection/Mood for both parties and any relationship-type change. Auto-dismisses after ~3.5 s; clicking the panel also dismisses. It never blocks the world after dismissal and is hidden when the toggle is off.
+- **Feedback toggle — exported flag on `Game.gd` (user-approved).** `@export var show_relationship_feedback: bool = true`, with `set_relationship_feedback_enabled()` / `is_relationship_feedback_enabled()` as the runtime seam. No Options menu in v1; ticket 017 persists the flag in the save payload. Both on and off states are headless-verified.
+- **Resolver result shape:** `resolve()` returns a plain Dictionary (success, roll pieces, margin/scale factors, per-party deltas, per-party before/after meter+mood+relationship snapshots, `relationship_changed`) so feedback and future tickets (016/018) consume one payload. `Game.gd` also emits `dialogue_resolved(result)` for observers.
+- **Verification:** headless Godot 4.2.1 checks for the roll formula, success/failure, margin bounds, modifier matching/clamping, both-party deltas + clamps, all five relationship types + mutual gate, feedback visibility/toggle, and the DebugStart→Game launch path. Temp scripts removed after the run per repo convention.
+
+### Ticket 016 — NPC-initiated interactions (implementation decisions)
+- **Approach A — pure helper + thin wiring + reuse of 014/015 seams (chosen).** A new
+  `scripts/NpcInitiation.gd` (`RefCounted`, static methods) owns outgoingness scoring,
+  initiator eligibility, target weighting and random topic pick; `Game.gd` only runs the
+  periodic check and marks participants busy. Embedding initiation in `Game.gd` (no test
+  seam) or in `Npc` (scene-coupled) was rejected. Mirrors `DialogueFilter`/`DialogueResolver`
+  so the pipeline stays pair-agnostic.
+- **"Not busy" means not already talking and not in forced class travel (user-approved).**
+  `Npc.is_busy()` literally includes ordinary free-time hangout goals, which are almost
+  always active, so using it verbatim would make acceptance criterion 3 effectively
+  unreachable. Normal goal-driven movement does NOT block initiation; only
+  `is_conversation_busy()` (player- or NPC-initiated) and a forced `class:` destination do.
+  `Npc.is_forced_destination()` is the new read-only seam for the latter.
+- **Outgoingness is a trait score (user-approved).** `CharacterTemplate` has no numeric
+  outgoingness field, so score the template's trait ids/tags: positive keys
+  `trait:outgoing`, `outgoing`, `sociable`, `extrovert`, `extroverted`; negative keys
+  `trait:shy`, `shy`, `introvert`, `introverted`, `reserved`. Score = positives − negatives
+  (each distinct key counted once); an NPC may initiate when score ≥ 1. Authored roster:
+  Sam and Taylor (both `trait:outgoing`) qualify; Alex (`trait:shy`), Jordan and Riley do
+  not. Tags "social"/"quiet" are deliberately NOT used because `trait_shy.tres` also
+  carries "social" and would false-positive.
+- **Cadence: check every ~2 s, multiple concurrent interactions allowed (user-approved).**
+  No global one-at-a-time lock. Each initiation holds both participants for ~2 s so it is
+  observable, and each initiator has an ~8 s cooldown so the same NPC cannot dominate.
+  A per-participant busy set prevents overlapping conversations for the same character.
+  Exported/tunable on `Game.gd`: check interval, hold duration, initiator cooldown.
+- **Target weighting = familiarity + outgoingness + proximity (user-approved).** Weight a
+  candidate by `BASE + directed_familiarity/10 × FAM_WEIGHT + target_outgoingness ×
+  OUTGOING_WEIGHT + proximity_bonus`, where proximity falls off linearly to 0 at a default
+  radius of 160 px. Proximity is a weight, not an exclusion, so distant characters remain
+  eligible and the pipeline stays pair-agnostic. The player and other NPCs are both valid
+  targets; weighted selection is seeded and headless-reproducible.
+- **Random pick and resolution reuse the existing seams.** `DialogueFilter.build_pool()`
+  produces the eligible pool, `NpcInitiation.pick_topic()` makes one seeded random choice,
+  and `Game.gd` emits the same `dialogue_topic_selected(topic, initiator_id, target_id)`
+  signal ticket 015 already listens to — no second resolution path, no deltas in 016.
+- **Duplicate guard.** An id-keyed busy set covers both parties; NPC participants get
+  `set_conversation_busy(true)` for the hold (freezing movement without discarding their
+  goal/nav target). A player who is the target is flagged busy in `Game` only — no input
+  lock, since an NPC talking at the player should not seize the controls. Player-initiated
+  dialogue also checks the busy set so it cannot open on a character already interacting.
+- **Review fixes (2026-11-24).** Three evidence-backed findings from the independent
+  reviewer plus one panel-UX change requested by the user were applied:
+  1. Initiation checks now also require `not TimeManager.is_skipping()`, so a skip's
+     clock-halt beat is not simulated (reproduced before the fix with
+     `SKIP_BEAT_PROBE events=1 skip_active_at_emit=true`).
+  2. `_initiation_attempts` resets on `TimeManager.day_started` (cooldowns too), so a
+     replayed day produces the same seeded picks as a day reached through play.
+  3. The feedback panel is shown only for interactions involving the player; NPC↔NPC
+     outcomes still resolve and emit `dialogue_resolved` but do not replace the HUD.
+  4. `InteractionFeedbackUI` queues player-involving results and shows them one after
+     another, so concurrent initiations no longer overwrite an unread outcome.
+  Post-fix verification: 21/21 headless checks PASS (including new regressions for all
+  four fixes), editor scan and 180-frame smoke clean.
+- **Verification:** headless Godot 4.2.1 checks the pure helper (scoring, gating, weighting,
+  seeded selection), the Game integration (initiation fires in free time, both directed
+  meters change, player and NPC targets, empty-pool/no-candidate safety, no duplicates),
+  plus editor scan and main-scene smoke. Temp scripts removed after the run per repo
+  convention.
+
+### Ticket 017 — Save/load (implementation decisions)
+- **Approach A — SaveGame resource + SaveManager slot API + thin Game/GameManager wiring (chosen).** A new `scripts/SaveGame.gd` (`class_name SaveGame extends Resource`) is the whole-state payload; `SaveManager` owns slot file I/O and version validation; `Game.gd` supplies a state-provider Callable and handles restore; `GameManager` owns the load→Game.tscn entry path. Embedding serialization in `Game.gd` and putting file I/O in `NpcInstance` were rejected (no reusable seam / data becomes I/O code). Mirrors the pure-helper + thin-wiring pattern used by 014/015/016.
+- **User-approved triggers (debug slice; menus deferred):** in-game debug hotkeys **F5 = manual save**, **F9 = reload most recently written slot**, backed by public methods `SaveManager.save_slot(name)`, `SaveManager.load_slot(name)` / `GameManager.load_slot(name)` for headless tests and arbitrary slots. New input actions `manual_save` / `manual_load` in `project.godot`; keys are guarded with `InputMap.has_action()` so stripped scenes/tests do not error. The DayEnd `manual_save_requested("day_end")` signal from ticket 011 stays a seam for a future save-prompt UI; no summary screen in v1.
+- **Slot scheme:** Godot text resources (`.tres`) at `user://saves/<slot>.tres`; slot ids are arbitrary sanitized strings (letters/digits/`_`/`-`), so slots are unlimited and caller-named — no numeric cap. Sanitization appends an 8-hex-char hash of the raw name whenever characters are changed or the name is truncated, so `"a/b"` and `"a b"` cannot silently collapse onto one file. `autosave` and `manual` are reserved: general `save_slot()` callers are rejected with a recoverable error; only the DayEnd hook and the F5 handler pass the internal bypass. F9 loads the slot with the highest monotonic `write_seq` (a counter one greater than the largest already on disk), with `saved_at` and the slot name only as tie-breakers, so two writes in one millisecond still pick the later one. Public `list_slots()` / `has_slot()` / `delete_slot()` / `get_last_saved_slot()` round out slot management. (Code-review findings 4 and 5.)
+- **Save payload:** `version: int`, `saved_at: int` (Unix ms, for F9 recency), `day_snapshot: Dictionary` (exactly `TimeManager.get_day_snapshot()`), `player_instance: NpcInstance`, `npc_instances: Array[NpcInstance]`, and `show_relationship_feedback: bool` (the ticket-015 save option). All exported so `ResourceSaver` persists them; `NpcInstance.tier` remains unexported/runtime-only and is recomputed on load.
+- **Save version / forward compatibility:** `SaveGame.CURRENT_VERSION = 1`. Loading a newer version is a **recoverable error** — log, return `null`, leave `GameManager.current_save` untouched, no crash (matches acceptance criterion 6's spirit). Older versions load with a warning; v1 has no migrations to run. Version **and** full payload shape (`SaveGame.is_well_formed()`) are checked at the load gate before any state is applied, so a rejected save never partially mutates the live day; `Game._ready()` restores the day snapshot before creating NPCs and falls back to a genuinely fresh day on failure. (Code-review findings 1 and 2.)
+- **State-provider seam:** `Game.gd` registers `SaveManager.set_state_provider(Callable)` in `_ready()`; the callable returns `{ player_instance, npc_instances, show_relationship_feedback }`. `SaveManager.autosave(snapshot)` (called by TimeManager at DayEnd) and `save_slot()` both combine the TimeManager day snapshot with the provider payload, so NPCs/player instances are never duplicated or re-derived in the autoload.
+- **Load/restore path:** `GameManager.load_slot(name)` loads+validates the resource, stores it in `current_save`, and defers `change_scene("res://scenes/Game.tscn")`. `Game._ready()` detects a non-null `current_save` and takes a restore branch instead of `start_day(1)`: `TimeManager.restore_day_snapshot()` re-applies day/state/elapsed/attendance/grades/roster exactly (no `state_changed` emitted), saved NPC instances are rebuilt into `Npc` nodes through a spawner seam, the saved player instance replaces the freshly built one and is placed at its saved position, the player node's `global_position` is restored, and the feedback toggle is reapplied.
+- **AI resume (ticket-013 review follow-up #3):** because `restore_day_snapshot()` assigns state directly and emits no `state_changed`, add `Game.sync_ai_state()` that enables/disables AI from the current state (including applying `goal_destination` to each `NavigationAgent2D`) and call it from the restore path and from `_on_state_changed()`. `Npc.setup()` now aims the agent at a restored non-empty `current_goal` so in-flight class travel resumes. Ticket-013 review follow-up #5 is also closed: `_is_free_time_state()` matches the `state` argument against `TimeManager.DayState.FREETIME1/2/3` instead of reading global state by name.
+- **Restore copies, not aliases (code-review finding 3):** the player and every saved NPC are recreated through `NpcInstance.from_snapshot(snapshot())` at the restore boundary, so dialogue/AI mutation during play cannot desync `GameManager.current_save` from the file on disk. Deep copies are made at both write time and read time.
+- **Missing template on load is recoverable:** instance data is restored verbatim; a missing (or empty-id) template produces one consolidated warning listing every affected instance id, then degrades those instances (no AI template bonuses / placeholder visuals) without aborting the load or crashing. Matches the spec's "instance marked invalid, not a crash" and ticket-012's spawner behavior. (Code-review finding 6.)
+- **Verification:** headless Godot 4.2.1 checks the SaveGame round-trip (all fields, tier excluded), unlimited named slots, autosave at DayEnd, F5/F9-equivalent API paths, exact restore of stats/mood/meters/positions/period, stable-ID linkage, missing-template recovery, future-version rejection, AI resume after load, plus launch path and editor class-cache scan. Temp scripts removed afterward per repo convention.
+
+### Ticket 018 — Day-loop integration & acceptance verification (implementation decisions)
+- **Persistent test harness, not throwaway scripts (builder call).** Earlier tickets used temporary `verify_*.gd` scripts removed after each run. Ticket 018 explicitly asks for a permanent integration test, so a small `tests/` harness is added: `tests/IntegrationBootstrap.tscn` (the scene Godot launches), `tests/DayLoopIntegrationTest.gd` (the runner), and `tests/run_integration.ps1` (the one-command launcher). Prior tickets' throwaway scripts are not resurrected.
+- **Real entry point via a persistent runner (user-facing seam preserved).** The bootstrap scene adds the runner as a child of `/root` and then calls `GameManager.change_scene("res://scenes/DebugStart.tscn")`. Scene changes free only the current scene, so the runner survives and observes the real DebugStart → GameManager → Game.tscn transition. This keeps the test at the highest seam the ticket asks for ("via DebugStart.tscn") rather than instantiating Game.tscn directly.
+- **Deterministic clock control (builder call).** The runner disables `TimeManager._process` and drives `TimeManager.advance(delta)` directly with tunable short phase durations, so a whole day (≈230 s of real time at default settings) runs in a few seconds of headless frames. `advance()` is the same public seam prior tickets used for verification.
+- **Input-level player actions where possible (builder call).** Movement uses `Input.action_press/release("move_*")` through `Player._physics_process`. Headless Godot does not route `Input.parse_input_event()` to `_unhandled_input`, so E and number-key selection construct a real `InputEventKey` and call the `InteractionComponent`/`DialoguePoolUI` handlers directly (see the verification finding below). Test-only setup (placing the player next to an NPC) sets `global_position` directly; that is arrangement, not the behavior under test.
+- **Coverage map for all 10 acceptance criteria (builder call).** The same harness asserts: (1) full `state_changed` sequence through SAVE and autosave written; (2) movement + E + 3–5 pool + resolver result + feedback panel; (3) `npc_interaction_started` fires in free time; (4) named-slot save/reload restores player/NPC state identically with template linkage; (5) synthetic `user://` mod tree with valid/invalid/missing-dep manifests discovered/skipped without crash; (6) `.disabled` marker excludes a mod's resources; (7) a save whose instance references a missing template loads and keeps the instance; (8) `skip()` lands on the next phase boundary; (9) attendance + grade records exist after a period change; (10) code-comment audit. Mod checks re-run `ModLoader.load_mods()` and restore the real `res://mods/` registries afterward so later checks are unaffected.
+- **Marker-based pass/fail (builder call).** The runner prints `ALL_018_CHECKS_PASSED` only when every assertion passes and calls `get_tree().quit()`; the PowerShell launcher treats that marker as authoritative because the Godot 4.2.1 console exe can exit non-zero under PowerShell even on clean `--quit` runs (prior-ticket finding).
+- **No `class_name` in new test scripts (builder call).** Avoids requiring an editor class-cache rescan before headless parse (prior-ticket finding).
+- **Runner is attached to `/root` from a deferred bootstrap callback (verification finding).** Adding a node to `/root` from inside another node's `_ready()` did not run the new node's `_ready()` in Godot 4.2.1, so the harness silently never started. `IntegrationBootstrap` now defers the whole attach + scene-change sequence to the idle frame.
+- **Key events dispatched directly to the UI handlers (verification finding).** `Input.parse_input_event()` did not reach `_unhandled_input` in headless 4.2.1. The harness constructs a real `InputEventKey` and calls the `InteractionComponent`/`DialoguePoolUI` handlers directly, still exercising the exact E / 1–5 action-lookup and emit path. Player movement remains on the genuine `Input.action_press()` path.
+- **"Restores identically" allows text-resource float precision (verification finding).** A `.tres` round-trip writes positions to ~3 decimals (e.g. `277.3993 → 277.399`), so the AC4 assertion compares positions with a 0.01 px tolerance and every other field exactly. The acceptance criterion is interpreted as byte-identical semantic state within the save format's precision, not identical binary floats.
+- **RED proof before GREEN (builder call).** With all checks green, `DialogueFilter.build_pool()` was temporarily forced to return an empty array; the harness failed 4 checks (AC2 pool/resolution/meters and AC3 initiation), then the mutation was reverted and all checks returned green. This confirms the suite detects a real regression rather than merely running.
+- **AC10 means script headers plus majority function docs (review ruling).** 91 of ~300 shipped functions are trivial one-line accessors or `_ready()` stubs with no preceding `##` line. Requiring 100% per-function doc comments would touch ~20 production files for a verification ticket; the harness instead requires every script to carry a doc header and at least 50% of functions to be documented, and prints the measured coverage. Cost if wrong: a script with sparse but nonzero function docs could still pass; the printed ratio makes that visible.
+- **Save/mode fixtures are isolated (review fix).** The harness deletes the `autosave`, `integration` and `missing_template` slots before running (backing up and restoring any pre-existing autosave) and removes its synthetic `user://integration_mods/` tree on exit. Without this, an autosave from an earlier run made the DayEnd existence check pass even if autosave regressed, and synthetic mods leaked into user data.
+- **AC4 compares the full day snapshot (review fix).** The restore comparison includes `TimeManager.get_day_snapshot()` (phase elapsed, attendance, grades, roster, player id/absence), not only day/state, so a regression that drops per-day records is caught.
+- **Launcher is portable (review fix).** `tests/run_integration.ps1` accepts `-GodotPath`, then `$env:GODOT_PATH`, then PATH discovery, before falling back to the documented `D:\Godot` default.
+
+### Ticket 020 — Chunk-aware map renderer + chunk grid (implementation decisions)
+- **Workspace (user-approved):** implement in place on `master`; the developer's uncommitted Godot-editor `.tres` re-saves (UID additions / reformatted `placed_objects`) are left untouched. No worktree, no push without final approval.
+- **Chunk overlay (user-approved):** v1 has no map editor (deferred surface feature), so the "editor shows a chunk grid overlay" criterion is met by a reusable `scripts/ChunkGridOverlay.gd` (`class_name ChunkGridOverlay extends Node2D`) that draws chunk boundaries and is wired as a child of `MapRenderer` in `Game.tscn`. It is hidden by default and toggled in the running game with a new `toggle_chunk_grid` input action (F6). The component is map-driven and reusable by a future editor; no EditorPlugin/tool script in v1.
+- **Renderer structure (user-approved):** keep ONE `TileMap` holding every tile — Godot's native culling handles offscreen tiles, so tiles are never manually unloaded. Only placed-object nodes are grouped per chunk (under the existing `PlacedObjects` container) and manually instantiated / freed. The single `NavigationRegion2D` and `SpawnPoint` marker stay whole-map (navmesh holes are authored data, not render cost). Manual unload uses `remove_child(chunk); chunk.queue_free()` so re-renders never leave duplicate nodes in the tree for a frame (ticket 008 low finding).
+- **Chunk focus:** `MapRenderer` gains an exported `focus_path` (`NodePath`, wired to `../Player` in `Game.tscn`) and a public `update_chunks(world_position)` seam. `_process()` forwards the focus node's `global_position`; `update_chunks()` exits early unless the center chunk changed, so the per-frame cost is one chunk-coordinate division. Headless tests call `update_chunks()` directly with synthetic positions.
+- **Load/unload radii (user-approved):** exported `load_radius_chunks = 5`, `unload_radius_chunks = 6` (Chebyshev distance in chunk units, clamped so unload >= load). A chunk loads when `distance <= load_radius` and is only unloaded when `distance > unload_radius`, giving one chunk of hysteresis against boundary thrash. Chunks are derived from `Map.chunk_size` (tiles) × `Map.tile_size` (pixels); the debug map is 32×24 tiles → 1×1 chunk, so synthetic maps are used to exercise real load/unload. The radii are renderer-owned now; ticket 019's `ChunkManager` may later read/align them.
+- **Chunk grid math:** `Map` gains read-only helpers alongside the existing derived `chunk_grid_width/height/size`: `chunk_pixel_size()`, `tile_to_chunk()`, `world_to_chunk()`, `clamp_chunk()`, `chunk_rect()`, `get_chunk_count()`. Grid dimensions remain ceil-derived and 0 for a non-positive size/dimension. Placed objects outside the grid are clamped to the nearest valid chunk so no object is silently dropped.
+- **Verification (user-approved):** a persistent headless harness in `tests/` (`ChunkRendererBootstrap.tscn/.gd`, `ChunkRendererTest.gd`, `run_chunk_tests.ps1`) mirrors ticket 018's launcher pattern. It covers varied-dimension grid math, per-chunk placed-object assignment, load/unload with hysteresis, full-tile TileMap (native culling), overlay draw/toggle, and the real `Game.tscn` launch path. Synthetic maps keep the shipped `.tres` files untouched. Temp probe scripts are removed after each run.
+- **Tile-cell bug found and fixed (builder ruling):** a headless probe showed `TileMap.set_cell(layer, coords, tid)` with Godot 4.2's default `atlas_coords = Vector2i(-1,-1)` creates **zero** cells — ticket 008's renderer had never actually drawn any tiles. Cells are now set as `set_cell(0, coords, source_id, Vector2i(tid, 0))` (first TileSet source; atlas column = flat tile id; `-1` still clears). Cost if wrong: an authored multi-source TileSet with non-column tile ids would need an explicit id→atlas mapping; v1 uses one fallback tile (id 0), which now renders correctly. This is required by the "no missing tiles" criterion.
+- **Overlay survives re-render (builder ruling):** `render()` only removes nodes it created itself (tracked in `_generated_children`), so the scene-declared `ChunkGridOverlay` child is not freed on a map swap. A first implementation removed all children and silently deleted the overlay; the harness caught it.
+
+### Ticket 019 — ChunkManager + tiered NPC simulation (implementation decisions)
+- **Workspace (user-approved):** implement in place on `master`; no worktree; no GitHub push without the user's final approval (then mark the issue complete). Matches ticket 020's precedent.
+- **Tier visibility (user-approved):** keep `resources/maps/map_school.tres` at `chunk_size = 32` (32×24 tiles → 1×1 chunk grid), so every NPC stays `close` during normal play in the tiny debug slice. Tiering is verified with synthetic large maps/positions in the persistent harness. The 020 harness's `chunk_grid_size == Vector2i.ONE` assertion stays unchanged.
+- **Interaction guard (user-approved):** any explicit interaction attempt with a non-close NPC force-promotes it to `close` first (near **and** far), then opens dialogue. This keeps "only close-tier NPCs interactable in the steady state" while never dead-ending the player (safety net for tier-update lag, small close radius, NPC-initiated, zoomed-out camera).
+- **Architecture (builder call):** new `scripts/ChunkManager.gd` autoload (`*` prefix in `project.godot`) owns NPC registration, focus tracking, tier assignment with hysteresis, promotion interpolation state, and the NPC tick scheduler. It drives ticks by calling a new `Npc.simulate_tick(dt, coarse)` seam; a `chunk_managed` flag keeps Npc's legacy per-frame path intact for unmanaged instances. Mirrors the pure-helper + thin-wiring pattern used by 014–017.
+- **Config seam (builder call):** `scripts/ChunkConfig.gd` (`class_name ChunkConfig extends Resource`) carries exported tier radii/tick rates with defaults: `close_radius_chunks = 2`, `near_radius_chunks = 4`, `hysteresis_chunks = 1`, `promotion_duration_sec = 0.5`, `close_tick_sec = 0.0` (every frame), `near_tick_sec = 0.25`, `far_tick_sec = 5.0`. `ChunkManager.config` is exported (a fresh `ChunkConfig` is used when null); `set_config()`/`get_config()` are the runtime seams. Options UI wiring remains deferred.
+- **Tier thresholds (builder call):** Chebyshev chunk distance from the player. Promote far→near at `<= near_radius`, near→close at `<= close_radius`; demote close→near at `> close_radius + hysteresis`, near→far at `> near_radius + hysteresis`. The buffer gives one chunk of hysteresis against boundary thrash.
+- **`NpcInstance.coarse_position` (builder call):** unexported runtime-only `Vector2`, excluded from `snapshot()` just like `tier`. While far, coarse (straight-line) simulation advances `coarse_position` and mirrors it into authoritative `position`, so identity/state survives save/load; on promotion the node interpolates from the captured coarse position to `position` over `promotion_duration_sec`; demotion is instant and preserves state.
+- **Far simulation (builder call):** `Npc.simulate_tick(dt, true)` skips `NavigationAgent2D`, collision and obstacle sliding, and advances straight toward the goal in one large `dt`. Far nodes are hidden (no render); near/close nodes render normally. `move_and_slide()` is only used in the fine path, so far NPCs no longer push against furniture.
+- **Tick scheduler (builder call):** per-NPC accumulated time; close ticks every frame with `delta`, near every `near_tick_sec`, far every `far_tick_sec` with the accumulated large `dt`. `ChunkManager._process()` calls `update_focus()` then `tick_npcs()`. Game wires the player as focus and registers all spawned/restored NPCs, so close-tier behavior on the shipped map is unchanged (all 4 NPCs are in the single chunk) and tickets 016/018 are unaffected.
+- **Save/load (builder call):** `tier`/`coarse_position` are runtime-only and recomputed from the player's position on load. `Game._ready()` calls `ChunkManager.setup()`/`refresh()` after spawning/restoring (including the deferred restored-player position), so no tier state is serialized.
+- **Initiation gating (builder call):** NPC-initiated interactions consider only close-tier NPCs as initiators; the same steady-state invariant as the player guard. On synthetic multi-chunk maps this prevents far/near NPCs from talking; on the shipped map all NPCs qualify, so ticket 016 behavior is unchanged.
+- **Verification (builder call):** persistent `tests/ChunkManagerBootstrap.tscn/.gd`, `tests/ChunkManagerTest.gd`, `tests/run_chunk_tests_019.ps1` mirror 018/020. Cover all 11 ticket checkboxes with synthetic maps/positions, RED/GREEN proof, then re-run 018 (41/41) and 020 (58/58) as regressions. Marker `ALL_019_CHECKS_PASSED`; new test scripts avoid `class_name`.
+
+### Deferred (non-goals for v1)
+- Main/New Game/Load/Create/Mods/Options menus (functional).
+- Character/map creation tools and map editor.
+- Weekend/season break choice pop-ups.
+- Full academics (basic grade-per-class stub only).
+- Additional languages, audio polish.
+- Performance tuning beyond ~5 NPCs.
+- NPC override of existing resources by ID.
