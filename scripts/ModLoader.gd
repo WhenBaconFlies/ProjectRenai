@@ -97,6 +97,15 @@ var _loaded_mods: Array[String] = []
 ## Each entry: { "mod": String, "status": "loaded"|"skipped", "reason": String }
 var _last_report: Array = []
 
+## Ticket 031: read-only snapshot of every discovered mod (valid or invalid),
+## built from discovery + validation + the load report. The Mods Menu consumes
+## this instead of parsing mod.json a second time.
+var _installed_mods: Array = []
+
+## Discovery-stage skips (missing/invalid manifest, duplicate id) collected
+## while scanning the roots, so they can appear in _installed_mods too.
+var _discovery_skips: Array = []
+
 ## Root paths scanned by the most recent load_mods() call, in scan order.
 var _mods_roots: Array[String] = [DEFAULT_MODS_ROOT, USER_MODS_ROOT]
 
@@ -184,6 +193,15 @@ func get_last_report() -> Array:
 	return _last_report.duplicate(true)
 
 
+## Ticket 031: read-only snapshot of every discovered mod, in scan order. One
+## entry per mod: { id, name, version, author, dependencies, author_enabled,
+## settings_enabled, enabled, status, reason, root, folder }. Invalid mods are
+## included with blank metadata and their diagnostic reason. Deep copy so a UI
+## consumer can never mutate the loader's view of the install.
+func get_installed_mods() -> Array:
+	return _installed_mods.duplicate(true)
+
+
 ## First root used by the most recent scan. Kept for v1 callers; new code should
 ## use get_mods_roots() because the default scan now covers two roots.
 func get_mods_root() -> String:
@@ -237,6 +255,7 @@ func load_mods_from_roots(root_paths: Array) -> void:
 	for mod_id in order:
 		_load_one_mod(str(mod_id), enabled_mods)
 
+	_build_installed_mods(mods)
 	_is_loading = false
 	_log("Loaded %d mod(s); %d resource(s) registered from %d root(s)." % [
 		_loaded_mods.size(), _resource_count(), _mods_roots.size()
@@ -258,6 +277,8 @@ func _reset_registries() -> void:
 	_current_priority = EXTERNAL_PRIORITY
 	_loaded_mods.clear()
 	_last_report.clear()
+	_installed_mods.clear()
+	_discovery_skips.clear()
 
 
 ## Register authored base resources (characters, traits, dialogue topics,
@@ -355,13 +376,16 @@ func _discover_mods(root_path: String, mods: Dictionary, root_index: int = 0) ->
 			if not FileAccess.file_exists(manifest_path):
 				_log("SKIP mod folder '%s': missing %s" % [entry, MANIFEST_FILE])
 				_add_report(entry, "skipped", "missing %s" % MANIFEST_FILE, folder)
+				_note_discovery_skip(entry, folder, "missing %s" % MANIFEST_FILE, root_index, {})
 			else:
 				var parsed: Variant = _read_json(manifest_path)
 				var validation: Dictionary = _validate_manifest(parsed, entry)
 				if not bool(validation.get("ok", false)):
 					# Validation reasons already name the folder.
-					_log("SKIP: %s" % str(validation.get("reason", "invalid manifest")))
-					_add_report(entry, "skipped", str(validation.get("reason", "invalid manifest")), folder)
+					var reason: String = str(validation.get("reason", "invalid manifest"))
+					_log("SKIP: %s" % reason)
+					_add_report(entry, "skipped", reason, folder)
+					_note_discovery_skip(entry, folder, reason, root_index, {})
 				else:
 					var manifest: Dictionary = validation["manifest"]
 					var mod_id: String = str(manifest.get("id", entry))
@@ -372,6 +396,9 @@ func _discover_mods(root_path: String, mods: Dictionary, root_index: int = 0) ->
 						# Composite key keeps this skip distinct from the surviving
 						# mod's report entry, which uses the bare `mod_id`.
 						_add_report("%s@%s" % [mod_id, entry], "skipped", "duplicate mod id", folder)
+						# Folder name (not the surviving mod's id) keeps this row
+						# distinct from the loaded mod in the menu snapshot.
+						_note_discovery_skip(entry, folder, "duplicate mod id", root_index, {})
 					else:
 						manifest["_folder_path"] = folder
 						manifest["_root_index"] = root_index
@@ -601,6 +628,81 @@ func _read_json(path: String) -> Variant:
 ## (e.g. a duplicate-id skip and the surviving mod's load).
 func _add_report(mod: String, status: String, reason: String, folder: String = "") -> void:
 	_last_report.append({"mod": mod, "status": status, "reason": reason, "folder": folder})
+
+
+## Record a discovery-stage skip so the Mods Menu can show it alongside loaded
+## mods. `manifest` is empty when validation never produced a usable one.
+func _note_discovery_skip(id: String, folder: String, reason: String,
+		root_index: int, manifest: Dictionary) -> void:
+	var deps: Array = []
+	var author_enabled: bool = true
+	if not manifest.is_empty():
+		deps = (manifest.get("dependencies", []) as Array).duplicate()
+		author_enabled = manifest.get("enabled", true) != false
+	var settings_enabled: bool = _mod_enabled_from_settings(id)
+	_discovery_skips.append({
+		"id": id,
+		"name": str(manifest.get("name", "")),
+		"version": str(manifest.get("version", "")),
+		"author": str(manifest.get("author", "")),
+		"dependencies": deps,
+		"author_enabled": author_enabled,
+		"settings_enabled": settings_enabled,
+		"enabled": false,
+		"togglable": false,
+		"status": "skipped",
+		"reason": reason,
+		"root": _root_at(root_index),
+		"folder": folder,
+	})
+
+
+## Build the ticket-031 snapshot from the last load's manifests + diagnostics.
+func _build_installed_mods(mods: Dictionary) -> void:
+	_installed_mods.clear()
+	for id in mods.keys():
+		var mod_id: String = str(id)
+		var manifest: Dictionary = mods[id]
+		var folder: String = str(manifest.get("_folder_path", ""))
+		var report: Dictionary = _report_entry(mod_id, folder)
+		var author_enabled: bool = manifest.get("enabled", true) != false
+		var settings_enabled: bool = _mod_enabled_from_settings(mod_id)
+		_installed_mods.append({
+			"id": mod_id,
+			"name": str(manifest.get("name", "")),
+			"version": str(manifest.get("version", "")),
+			"author": str(manifest.get("author", "")),
+			"dependencies": (manifest.get("dependencies", []) as Array).duplicate(),
+			"author_enabled": author_enabled,
+			"settings_enabled": settings_enabled,
+			"enabled": author_enabled and settings_enabled,
+			"togglable": author_enabled,
+			"status": str(report.get("status", "skipped")),
+			"reason": str(report.get("reason", "")),
+			"root": _root_at(int(manifest.get("_root_index", 0))),
+			"folder": folder,
+		})
+	for skip_variant in _discovery_skips:
+		_installed_mods.append((skip_variant as Dictionary).duplicate(true))
+
+
+## Find the load report entry for a valid mod, preferring an exact folder match.
+func _report_entry(mod_id: String, folder: String) -> Dictionary:
+	for entry_variant in _last_report:
+		var entry: Dictionary = entry_variant
+		if str(entry.get("mod", "")) == mod_id and str(entry.get("folder", "")) == folder:
+			return entry
+	for entry_variant in _last_report:
+		var entry: Dictionary = entry_variant
+		if str(entry.get("mod", "")) == mod_id:
+			return entry
+	return {}
+
+
+func _root_at(index: int) -> String:
+	if index >= 0 and index < _mods_roots.size():
+		return _mods_roots[index]
+	return ""
 
 
 func _resource_count() -> int:
