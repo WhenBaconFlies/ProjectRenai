@@ -20,11 +20,11 @@ config/icon="res://icon.svg"
 GameManager="*res://scripts/GameManager.gd"
 SaveManager="*res://scripts/SaveManager.gd"
 TimeManager="*res://scripts/TimeManager.gd"
-ModLoader="*res://scripts/ModLoader.gd"
 AudioManager="*res://scripts/AudioManager.gd"
 LocalizationManager="*res://scripts/LocalizationManager.gd"
 ChunkManager="*res://scripts/ChunkManager.gd"
 SettingsManager="*res://scripts/SettingsManager.gd"
+ModLoader="*res://scripts/ModLoader.gd"
 
 [input]
 
