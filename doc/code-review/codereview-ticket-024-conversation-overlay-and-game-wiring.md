@@ -4,7 +4,7 @@
 - **Base:** `master` (merge-base: `240e37fbda32755705901dfcb8ea9fceafc944ab`)
 - **Changed files:** 17
 - **Findings:** 9 (Critical: 0, High: 0, Medium: 4, Low: 5) — merged from two independent review passes; the two High findings found by the second pass were already fixed in follow-up commit `9d0f660` and are not re-listed.
-- **Verification at review time:** 024 harness 36/36 before fixes, 39/39 after; regressions 018 42/42, 019 60/60, 020 58/58, 021 23/23, 022 23/23, 023 35/35.
+- **Verification at review time:** 024 harness 36/36 before fixes, 42/42 after (including the post-review editor-pass checks); regressions 018 42/42, 019 60/60, 020 58/58, 021 23/23, 022 23/23, 023 35/35.
 
 ## Findings
 
@@ -74,6 +74,13 @@
 ### Caveat on the earlier T38 fix
 The T38 test passed an unsupported topic array to `_try_one_initiation`, but the NPC→player branch intentionally ignores the caller's topic list and reads the supported pool from the registry. The check was relabelled to what it actually proves: "unsupported opening topics are replaced by reply-supported ones". The helper's genuine no-authored-reply fallback remains covered by ticket 023's T32.
 
+## Post-review editor pass (user-reported, not a review finding)
+
+The user ran the build in the editor and reported two issues the headless harness could not judge:
+
+1. The detailed feedback panel appeared bottom-centre, overlapping the conversation overlay. It was moved to the right-middle (`InteractionFeedbackUI.gd:_build()`) and check T41 asserts the anchors. The user's longer-term intent — a compact trend-only side indicator (`Fam +2 / Aff −1`) instead of full numbers — was recorded in `doc/idea-v2-decisions.md` and deliberately deferred.
+2. An NPC initiated a talk while far away from the player. `NpcInitiation.target_weight()` treated proximity as a bonus only. `Game.gd` now routes distant NPC→player initiations through `_begin_npc_approach()`: walk to the player first, then open the overlay on arrival, with timeout/retry cleanup. Checks T42/T43 cover the gating and arrival transition.
+
 ## Evidence validation
 
-All nine findings were re-checked against the working tree after fixes: the harness now reports 39/39 (`ALL_024_CHECKS_PASSED`), including new checks T37 (feedback labels), T38 (supported opening topics), and T24b (production gate path). No finding was retained without a file:line reference and concrete code/test evidence.
+All nine findings were re-checked against the working tree after fixes: the harness now reports 42/42 (`ALL_024_CHECKS_PASSED`), including new checks T37 (feedback labels), T38 (supported opening topics), T24b (production gate path) and T41–T43 (editor pass). No finding was retained without a file:line reference and concrete code/test evidence.

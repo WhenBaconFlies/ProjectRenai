@@ -9,7 +9,7 @@
 extends Node
 
 
-const EXPECTED_CHECKS: int = 39
+const EXPECTED_CHECKS: int = 42
 
 var _passed: int = 0
 var _failed: int = 0
@@ -52,6 +52,7 @@ func _run() -> void:
 	await _check_player_flow()
 	await _check_gate_callable()
 	await _check_npc_initiated_flow()
+	await _check_npc_approach()
 	await _check_no_candidate_safety()
 	_check(_passed == EXPECTED_CHECKS - 1, "T39: all expected 024 checks executed")
 	_finish()
@@ -151,6 +152,12 @@ func _check_player_flow() -> void:
 	)
 	var feedback: Node = _game.get_node_or_null("FeedbackLayer/InteractionFeedbackUI")
 	_check(feedback != null and bool(feedback.call("is_open")), "T16: feedback panel shows the turn")
+	var feedback_panel: PanelContainer = feedback.get("_panel") as PanelContainer if feedback != null else null
+	_check(
+		feedback_panel != null and feedback_panel.anchor_left == 1.0
+		and feedback_panel.anchor_top == 0.5,
+		"T41: feedback panel sits right-middle, clear of the bottom overlay"
+	)
 	var reaction: Array = ui.call("get_choices") as Array
 	_check(
 		reaction.size() == 1 and str(reaction[0]).contains("Continue"),
@@ -358,6 +365,48 @@ func _check_npc_initiated_flow() -> void:
 		forced_replies.size() >= 2 and forced_replies.size() <= 3,
 		"T38: unsupported opening topics are replaced by reply-supported ones"
 	)
+	if ui.is_open():
+		ui.call("cancel_conversation")
+		await _frames(2)
+
+
+## Editor-pass behavior: a distant NPC walks to the player before the overlay opens.
+func _check_npc_approach() -> void:
+	var ui: ConversationUI = _game.get_node_or_null("DialogueLayer/ConversationUI") as ConversationUI
+	var player: Node2D = _game.get_node_or_null("Player") as Node2D
+	var npcs_root: Node = _game.get_node_or_null("Npcs")
+	if ui == null or player == null or npcs_root == null or npcs_root.get_child_count() == 0:
+		return
+	var initiator: Npc = npcs_root.get_child(0) as Npc
+	for child in npcs_root.get_children():
+		var npc: Npc = child as Npc
+		if npc != null:
+			npc.set_conversation_busy(npc != initiator)
+			npc.clear_forced_destination()
+	var busy: Dictionary = _game.get("_initiation_busy")
+	busy.clear()
+	var cooldowns: Dictionary = _game.get("_initiation_cooldowns")
+	cooldowns.clear()
+	var approaches: Array = _game.get("_pending_approaches")
+	approaches.clear()
+	player.global_position = initiator.global_position + Vector2(240.0, 0.0)
+	initiator.global_position = player.global_position - Vector2(240.0, 0.0)
+	await _frames(2)
+	var topics: Array = []
+	var loader: Node = NpcInstance._mod_loader()
+	if loader != null:
+		topics = loader.call("get_all", str(loader.get("TYPE_DIALOGUE"))) as Array
+	_game.call("_try_one_initiation", initiator, initiator.instance.instance_id, topics, 7777)
+	await _frames(2)
+	_check(
+		not ui.is_open() and approaches.size() == 1,
+		"T42: a distant NPC approaches before opening the overlay"
+	)
+	# Simulate arrival deterministically instead of waiting on headless pathing.
+	initiator.global_position = player.global_position + Vector2(10.0, 0.0)
+	initiator.clear_forced_destination()
+	await _frames(3)
+	_check(ui.is_open() and approaches.is_empty(), "T43: arrival opens the NPC-initiated talk")
 	if ui.is_open():
 		ui.call("cancel_conversation")
 		await _frames(2)

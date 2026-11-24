@@ -65,6 +65,11 @@ const FALLBACK_PLAYER_ID: String = "player"
 @export var npc_initiation_hold_sec: float = 2.0
 ## Per-initiator cooldown so one outgoing NPC cannot dominate a free-time phase.
 @export var npc_initiation_cooldown_sec: float = 8.0
+## An NPC-initiated talk with the player starts only inside this distance; farther
+## NPCs walk over first (editor-pass decision in doc/idea-v2-decisions.md).
+@export var npc_talk_radius: float = 28.0
+## Give up on an approach after this long so a blocked path cannot hold the pair.
+@export var npc_approach_timeout_sec: float = 6.0
 
 
 var _npcs: Array = []
@@ -123,6 +128,9 @@ var _initiation_cooldowns: Dictionary = {}
 ## Active holds: [{ initiator_id, target_id, remaining }]. Multiple are allowed;
 ## participants are locked individually so the same character is never double-booked.
 var _active_initiations: Array = []
+## NPC→player talks that are walking over before the overlay opens. Each entry is
+## { initiator_id, npc, remaining, retries }; arrival opens the conversation.
+var _pending_approaches: Array = []
 
 
 func _ready() -> void:
@@ -844,7 +852,10 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 	# Ticket 024: only an NPC→player initiation uses the overlay and the reply
 	# shape. NPC↔NPC keeps v1's immediate resolution (no player can answer).
 	if target_id == _player_id():
-		_begin_npc_conversation(initiator, initiator_id)
+		if initiator_position.distance_to(_player_position()) > npc_talk_radius:
+			_begin_npc_approach(initiator, initiator_id)
+		else:
+			_begin_npc_conversation(initiator, initiator_id)
 		return
 
 	var pool: Array = DialogueFilter.build_pool(
@@ -881,6 +892,93 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 	dialogue_topic_selected.emit(topic, initiator_id, target_id)
 	if not result.is_empty():
 		dialogue_resolved.emit(result)
+
+
+## Start an NPC→player approach. The pair is claimed immediately so no other
+## initiation can interleave, but input is not locked and the overlay stays closed
+## until the NPC actually reaches the player.
+func _begin_npc_approach(initiator: Npc, initiator_id: String) -> void:
+	if _dialogue_open or initiator == null or initiator.instance == null:
+		return
+	var player_id: String = _player_id()
+	if _initiation_busy.has(initiator_id) or _initiation_busy.has(player_id):
+		return
+	_initiation_busy[initiator_id] = true
+	_initiation_busy[player_id] = true
+	_initiation_cooldowns[initiator_id] = npc_initiation_cooldown_sec
+	_issue_approach_destination(initiator)
+	_pending_approaches.append({
+		"initiator_id": initiator_id,
+		"npc": initiator,
+		"remaining": maxf(0.5, npc_approach_timeout_sec),
+		"retries": 2,
+	})
+
+
+## Aim the NPC at a point just beside the player rather than on top of them.
+func _issue_approach_destination(initiator: Npc) -> void:
+	if initiator == null or not is_instance_valid(initiator):
+		return
+	var from: Vector2 = initiator.global_position
+	var to: Vector2 = _player_position()
+	var offset: Vector2 = from - to
+	var stand_off: float = maxf(4.0, npc_talk_radius * 0.6)
+	if offset.length_squared() < 0.0001:
+		offset = Vector2.RIGHT
+	var destination: Vector2 = to + offset.normalized() * stand_off
+	initiator.set_forced_destination("talk:%s" % _player_id(), destination)
+
+
+## Arrival opens the conversation; a timeout or the player walking away releases
+## the pair without leaving a busy flag or forced destination behind.
+func _update_approaches(delta: float) -> void:
+	if _pending_approaches.is_empty():
+		return
+	for i in range(_pending_approaches.size() - 1, -1, -1):
+		var entry: Dictionary = _pending_approaches[i]
+		var npc: Npc = entry.get("npc") as Npc
+		var initiator_id: String = str(entry.get("initiator_id", ""))
+		if npc == null or not is_instance_valid(npc) or npc.instance == null:
+			_release_approach(entry)
+			_pending_approaches.remove_at(i)
+			continue
+		if _dialogue_open:
+			# Another conversation won while this NPC was walking over.
+			npc.clear_forced_destination()
+			_release_approach(entry, true)
+			_pending_approaches.remove_at(i)
+			continue
+		var distance: float = npc.global_position.distance_to(_player_position())
+		if distance <= npc_talk_radius:
+			entry["remaining"] = float(entry.get("remaining", 0.0)) - delta
+			if not npc.is_forced_destination():
+				_pending_approaches.remove_at(i)
+				_begin_npc_conversation(npc, initiator_id)
+			elif float(entry["remaining"]) <= 0.0:
+				npc.clear_forced_destination()
+				_release_approach(entry)
+				_pending_approaches.remove_at(i)
+		elif not npc.is_forced_destination():
+			# Reached the old spot but the player moved away; retry, then give up.
+			if int(entry.get("retries", 0)) > 0:
+				entry["retries"] = int(entry.get("retries", 0)) - 1
+				entry["remaining"] = maxf(0.5, npc_approach_timeout_sec)
+				_issue_approach_destination(npc)
+			else:
+				_release_approach(entry)
+				_pending_approaches.remove_at(i)
+		else:
+			entry["remaining"] = float(entry.get("remaining", 0.0)) - delta
+			if float(entry["remaining"]) <= 0.0:
+				npc.clear_forced_destination()
+				_release_approach(entry)
+				_pending_approaches.remove_at(i)
+
+
+func _release_approach(entry: Dictionary, preserve_player_lock: bool = false) -> void:
+	_release_initiation_party(str(entry.get("initiator_id", "")))
+	if not (_dialogue_open and preserve_player_lock):
+		_initiation_busy.erase(_player_id())
 
 
 ## Topics that have at least two authored rollable replies. Only these can open
@@ -995,6 +1093,14 @@ func _clear_active_initiations() -> void:
 		_release_initiation_party(str(entry.get("initiator_id", "")))
 		_release_initiation_party(str(entry.get("target_id", "")))
 	_active_initiations.clear()
+	# An approach cannot span a phase boundary. Preserve the player's lock if a
+	# conversation is already open, then release it in _close_conversation().
+	for entry in _pending_approaches:
+		var approaching: Npc = entry.get("npc") as Npc
+		if approaching != null and is_instance_valid(approaching):
+			approaching.clear_forced_destination()
+		_release_approach(entry, true)
+	_pending_approaches.clear()
 	# A phase change must not silently unlock an open conversation's parties;
 	# those flags are released only by _close_conversation().
 	for id in _initiation_busy.keys():
@@ -1038,6 +1144,7 @@ func _is_free_time_state(state: int) -> bool:
 ## final `class_travel_lead_sec` of free time.
 func _process(delta: float) -> void:
 	_update_initiations(delta)
+	_update_approaches(delta)
 	if not TimeManager.is_running():
 		return
 	var state: int = TimeManager.get_state()

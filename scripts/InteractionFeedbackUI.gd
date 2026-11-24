@@ -45,14 +45,16 @@ func _build() -> void:
 
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_panel.anchor_left = 0.5
-	_panel.anchor_top = 1.0
-	_panel.anchor_right = 0.5
-	_panel.anchor_bottom = 1.0
-	_panel.offset_left = -260.0
-	_panel.offset_top = -150.0
-	_panel.offset_right = 260.0
-	_panel.offset_bottom = -24.0
+	# Right-middle of the viewport (editor pass): the bottom-centre position
+	# covered the ConversationUI overlay during a talk.
+	_panel.anchor_left = 1.0
+	_panel.anchor_top = 0.5
+	_panel.anchor_right = 1.0
+	_panel.anchor_bottom = 0.5
+	_panel.offset_left = -300.0
+	_panel.offset_top = -90.0
+	_panel.offset_right = -16.0
+	_panel.offset_bottom = 90.0
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.10, 0.12, 0.18, 0.95)
 	style.corner_radius_top_left = 8
