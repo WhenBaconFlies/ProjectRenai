@@ -4,11 +4,11 @@
 
 **Blocked by:** 021 (Dialogue greeting + response schemas + registry buckets)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] ~15–20 new traits exist as `.tres` across all four categories with point costs and tags
-- [ ] ~40–60 dialogue topics exist as `.tres` across greetings, topics, and responses
-- [ ] Each topic has at least one authored default response (blank band/outcome)
-- [ ] Greetings cover the four variation factors (relationship, mood, period, traits/interests)
-- [ ] All content loads through `ModLoader` base registration with no duplicate-id conflicts
-- [ ] A smoke check shows at least one eligible greeting and response for the default player/NPC pair
+- [x] ~15–20 new traits exist as `.tres` across all four categories with point costs and tags (18 new, 24 total)
+- [x] ~40–60 dialogue topics exist as `.tres` across greetings, topics, and responses (12 + 16 + 27 = 55 total)
+- [x] Each topic has at least one authored default response (blank band/outcome)
+- [x] Greetings cover the four variation factors (relationship, mood, period, traits/interests)
+- [x] All content loads through `ModLoader` base registration with no duplicate-id conflicts
+- [x] A smoke check shows at least one eligible greeting and response for the default player/NPC pair

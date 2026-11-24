@@ -4,12 +4,20 @@
 
 **Blocked by:** 021 (Dialogue greeting + response schemas + registry buckets), 022 (Traits + full dialogue content)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `Conversation` is pure (no scene tree/autoload globals), seeded, and headless-instantiable
-- [ ] Phase flow supports greeting → topic → response → optional follow-up → done, with max 2 player picks
-- [ ] Greeting selection filters by all four factors with a safe any-eligible fallback
-- [ ] Response selection applies the layered fallback chain with no dead-end
-- [ ] `resolve_response()` resolves a response with roll fields and produces line-only outcomes when fields are empty
-- [ ] The 5-type relationship band is derived for the responder toward the speaker
-- [ ] Headless checks cover turn limits, fallbacks, both-party deltas, and seeded determinism
+- [x] `Conversation` is pure (no scene tree/autoload globals), seeded, and headless-instantiable
+- [x] Phase flow supports greeting → topic → response → optional follow-up → done, with max 2 player picks
+- [x] Greeting selection filters by all four factors with a safe any-eligible fallback
+- [x] Response selection applies the layered fallback chain with no dead-end
+- [x] `resolve_response()` resolves a response with roll fields and produces line-only outcomes when fields are empty
+- [x] The 5-type relationship band is derived for the responder toward the speaker
+- [x] Headless checks cover turn limits, fallbacks, both-party deltas, and seeded determinism
+
+## Verification
+
+- Persistent harness: `tests/ConversationHelperBootstrap.*`, `tests/ConversationHelperTest.gd`, `tests/run_conversation_helper_tests.ps1` — **35/35 checks pass** (`ALL_023_CHECKS_PASSED`, `CONVERSATION_023_OK`).
+- Regressions re-run green: 018 (41/41), 019 (60/60), 020 (58/58), 021 (23/23), 022 (23/23).
+- Builder decisions recorded in `doc/idea-v2-decisions.md` under "Ticket 023 — conversation helper + filter/resolver decisions".
+- RED/GREEN proof (v2 acceptance 13): temporarily setting `Conversation.MAX_TURNS = 3` made T9/T10/T35 fail (32 passed / 3 failed, `CONVERSATION_023_FAILED`); restoring `MAX_TURNS = 2` returned 35/35 (`ALL_023_CHECKS_PASSED`).
+- Code review: `doc/code-review/codereview-ticket-023-conversation-helper-and-resolver-extensions.md` (3 findings: 1 Medium, 2 Low). All three were applied: line-only payloads now carry `show_feedback: false` and `InteractionFeedbackUI.show_result()` skips them; an empty NPC-initiated reply pool now yields one generated line-only option; two conversation-level fallback checks were added.

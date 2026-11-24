@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="DialogueTopic" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueTopic.gd" id="1_topic"]
+
+[resource]
+script = ExtResource("1_topic")
+id = "topic:study_together"
+text = "Want to go over the homework together?"
+min_mood = 0
+min_familiarity = 0
+min_affection = 0
+required_interests = PackedStringArray()
+required_traits = PackedStringArray("academic")
+required_stat = ""
+required_stat_min = 0
+checked_stat = "intelligence"
+difficulty = 7
+affection_delta_success = 2
+familiarity_delta_success = 3
+mood_delta_success = 1
+affection_delta_failure = 0
+familiarity_delta_failure = 1
+mood_delta_failure = -1
+recipient_modifiers = []

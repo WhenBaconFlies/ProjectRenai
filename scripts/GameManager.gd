@@ -6,12 +6,29 @@
 ## this is the stable entry point other systems talk to.
 extends Node
 
+## --- Ticket 026: menu / gameplay scene routes ------------------------------
+## Scene paths are centralised here so menu buttons and later tickets (027–031)
+## share one routing surface. `change_scene()` remains the low-level seam.
+const SCENE_MAIN_MENU: String = "res://scenes/MainMenu.tscn"
+const SCENE_LOAD_GAME: String = "res://scenes/LoadGame.tscn"
+const SCENE_OPTIONS: String = "res://scenes/Options.tscn"
+const SCENE_MODS_MENU: String = "res://scenes/ModsMenu.tscn"
+const SCENE_GAME: String = "res://scenes/Game.tscn"
+
 ## The currently loaded save resource. `null` means "no save / fresh start",
 ## which is the default state DebugStart exercises.
 var current_save = null
 
 ## Path of the scene currently considered "active" (informational).
 var current_scene_path: String = ""
+
+## Number of scene swaps actually started. Public so headless harnesses can
+## assert that a repeated button press does not queue a second swap.
+var scene_change_count: int = 0
+
+## Set while a swap is queued, cleared on the frame after it starts so a second
+## request in the same frame cannot double-load a scene.
+var _scene_change_pending: bool = false
 
 
 func _ready() -> void:
@@ -26,7 +43,34 @@ func start_fresh_day() -> void:
 	# The Game scene starts the clock in its own _ready(), after all of its
 	# children (and their listeners) exist. change_scene_to_file() defers the
 	# swap past this call, so starting here would emit day_started too early.
-	change_scene("res://scenes/Game.tscn")
+	change_scene(SCENE_GAME)
+
+
+## --- Ticket 026: menu routing helpers -------------------------------------
+
+## Return to the player-facing main menu.
+func show_main_menu() -> void:
+	change_scene(SCENE_MAIN_MENU)
+
+
+## Route to the Load Game screen (a safe placeholder in ticket 026).
+func show_load_game() -> void:
+	change_scene(SCENE_LOAD_GAME)
+
+
+## Route to the Options screen (a safe placeholder in ticket 026).
+func show_options() -> void:
+	change_scene(SCENE_OPTIONS)
+
+
+## Route to the Mods Menu (a safe placeholder in ticket 026).
+func show_mods_menu() -> void:
+	change_scene(SCENE_MODS_MENU)
+
+
+## Close the game cleanly. The main menu calls this from its Quit button.
+func quit_game() -> void:
+	get_tree().quit()
 
 
 ## Load a saved day and enter Game.tscn. SaveManager validates the slot and
@@ -41,7 +85,7 @@ func load_slot(slot_name: String) -> bool:
 		])
 		return false
 	current_save = save
-	change_scene("res://scenes/Game.tscn")
+	change_scene(SCENE_GAME)
 	return true
 
 
@@ -59,11 +103,23 @@ func load_last_slot() -> bool:
 ## (does not crash) on failure so a missing scene surfaces as a recoverable
 ## error rather than a hard crash.
 func change_scene(path: String) -> void:
+	if _scene_change_pending:
+		push_warning("[GameManager] scene change to '%s' ignored; a swap is already pending" % path)
+		return
+	_scene_change_pending = true
 	current_scene_path = path
 	call_deferred("_do_change_scene", path)
 
 
 func _do_change_scene(path: String) -> void:
+	scene_change_count += 1
 	var err: int = get_tree().change_scene_to_file(path)
+	# The clear is deferred to the end of this frame: a second press in the
+	# same frame is still blocked, but the next frame's legitimate route is not.
+	call_deferred("_clear_scene_change_pending")
 	if err != OK:
 		push_error("GameManager: failed to load scene '%s' (error %d)" % [path, err])
+
+
+func _clear_scene_change_pending() -> void:
+	_scene_change_pending = false

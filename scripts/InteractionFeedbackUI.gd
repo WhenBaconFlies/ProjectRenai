@@ -45,14 +45,16 @@ func _build() -> void:
 
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_panel.anchor_left = 0.5
-	_panel.anchor_top = 1.0
-	_panel.anchor_right = 0.5
-	_panel.anchor_bottom = 1.0
-	_panel.offset_left = -260.0
-	_panel.offset_top = -150.0
-	_panel.offset_right = 260.0
-	_panel.offset_bottom = -24.0
+	# Right-middle of the viewport (editor pass): the bottom-centre position
+	# covered the ConversationUI overlay during a talk.
+	_panel.anchor_left = 1.0
+	_panel.anchor_top = 0.5
+	_panel.anchor_right = 1.0
+	_panel.anchor_bottom = 0.5
+	_panel.offset_left = -300.0
+	_panel.offset_top = -90.0
+	_panel.offset_right = -16.0
+	_panel.offset_bottom = 90.0
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.10, 0.12, 0.18, 0.95)
 	style.corner_radius_top_left = 8
@@ -95,6 +97,11 @@ func is_open() -> bool:
 ## If a panel is already showing, the new result is displayed when that one closes.
 func show_result(result: Dictionary, initiator_name: String, target_name: String) -> void:
 	if result.is_empty():
+		return
+	# Line-only reactions are spoken lines, not stat checks. Without this gate the
+	# panel would render a misleading "Not quite..." plus a bogus 0+0+0 vs 0 roll
+	# (ticket 023's resolved response fallback produces line-only outcomes).
+	if bool(result.get("line_only", false)) or not bool(result.get("show_feedback", true)):
 		return
 	if _is_open:
 		_queue.append({

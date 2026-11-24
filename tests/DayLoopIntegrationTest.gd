@@ -146,9 +146,9 @@ func _check_movement() -> void:
 func _check_player_dialogue() -> void:
 	var npcs_root: Node = _game.get_node_or_null("Npcs")
 	var player: Node2D = _game.get_node_or_null("Player") as Node2D
-	var pool_ui: Node = _game.get_node_or_null("DialogueLayer/DialoguePoolUI")
-	if npcs_root == null or npcs_root.get_child_count() == 0 or player == null or pool_ui == null:
-		_check(false, "AC2: dialogue pool opened (missing scene nodes)")
+	var conversation_ui: Node = _game.get_node_or_null("DialogueLayer/ConversationUI")
+	if npcs_root == null or npcs_root.get_child_count() == 0 or player == null or conversation_ui == null:
+		_check(false, "AC2: conversation overlay opened (missing scene nodes)")
 		return
 
 	# Arrange: put the player inside InteractionComponent's proximity radius.
@@ -169,14 +169,18 @@ func _check_player_dialogue() -> void:
 	_send_key_to(interaction, KEY_E)
 	for _i in range(3):
 		await get_tree().process_frame
-	_check(bool(pool_ui.call("is_open")), "AC2: E opens the dialogue pool")
+	_check(bool(conversation_ui.call("is_open")), "AC2: E opens the conversation overlay")
 
-	var pool: Array = pool_ui.get("_topics") as Array
+	# Ticket 024: the greeting is acknowledged first, then the topic pool appears.
+	_send_key_to(conversation_ui, KEY_1)
+	for _i in range(2):
+		await get_tree().process_frame
+	var pool: Array = conversation_ui.call("get_choices") as Array
 	var pool_size: int = pool.size()
 	_check(pool_size >= 3 and pool_size <= 5, "AC2: pool has 3-5 topics (got %d)" % pool_size)
 
 	var resolved_before: int = _resolved.size()
-	_send_key_to(pool_ui, KEY_1)
+	_send_key_to(conversation_ui, KEY_1)
 	for _i in range(3):
 		await get_tree().process_frame
 	_check(_resolved.size() > resolved_before, "AC2: topic selection emits a resolver result")
@@ -194,7 +198,18 @@ func _check_player_dialogue() -> void:
 	var feedback: Node = _game.get_node_or_null("FeedbackLayer/InteractionFeedbackUI")
 	_check(changed, "AC2: both parties' familiarity, affection and mood change")
 	_check(feedback != null and bool(feedback.call("is_open")), "AC2: feedback panel is shown")
-	_check(bool(pool_ui.call("is_open")) == false, "AC2: pool closes after selection")
+	# The one-pick close path is gone: after the roll the NPC's reactive line is
+	# shown with a single Continue choice (and a second exchange may follow).
+	var reaction_choices: Array = conversation_ui.call("get_choices") as Array
+	_check(
+		bool(conversation_ui.call("is_open")) and reaction_choices.size() == 1,
+		"AC2: conversation advances to the NPC response instead of closing"
+	)
+	# Leave explicitly so the later free-time initiation check is not blocked.
+	conversation_ui.call("cancel_conversation")
+	for _i in range(2):
+		await get_tree().process_frame
+	_check(bool(conversation_ui.call("is_open")) == false, "AC2: leaving ends the conversation")
 
 
 ## --- AC8 / AC9: skip, attendance and grade stub -----------------------------

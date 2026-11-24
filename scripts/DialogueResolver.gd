@@ -69,14 +69,101 @@ static func resolve(
 ) -> Dictionary:
 	if topic == null or initiator == null or target == null:
 		return {}
+	return _resolve_fields(
+		_roll_fields(
+			topic.id, topic.text, topic.checked_stat, topic.difficulty,
+			topic.affection_delta_success, topic.familiarity_delta_success, topic.mood_delta_success,
+			topic.affection_delta_failure, topic.familiarity_delta_failure, topic.mood_delta_failure
+		),
+		topic.recipient_modifiers,
+		initiator, target, initiator_template, target_template, seed_value
+	)
 
+
+## Resolve a `DialogueResponse` using its OWN roll fields (ticket 023). A response
+## is line-only when `checked_stat` is empty; in that case no roll runs and no
+## meter/mood is touched — the returned payload still has the standard shape so
+## UI and verification can consume either kind uniformly.
+##
+## `topics` is the array of authored `DialogueTopic` resources (ticket 024 passes
+## ModLoader.get_all(TYPE_DIALOGUE)). `DialogueResponse` deliberately carries no
+## recipient modifiers (021 decision), so when the response's `topic_id` resolves
+## to one of those topics its recipient modifiers are reused; generic lines get
+## none. The helper stays pure: no autoload or scene-tree access.
+static func resolve_response(
+	response: DialogueResponse,
+	initiator: NpcInstance,
+	target: NpcInstance,
+	initiator_template: CharacterTemplate,
+	target_template: CharacterTemplate,
+	topics: Array = [],
+	seed_value: int = -1
+) -> Dictionary:
+	if response == null or initiator == null or target == null:
+		return {}
+
+	if response.is_line_only():
+		return _line_only_result(response, initiator, target, initiator_template, target_template)
+
+	var keyed_topic: DialogueTopic = _find_topic(topics, response.topic_id)
+	var modifiers: Array = keyed_topic.recipient_modifiers if keyed_topic != null else []
+	var result: Dictionary = _resolve_fields(
+		_roll_fields(
+			response.id, response.text, response.checked_stat, response.difficulty,
+			response.affection_delta_success, response.familiarity_delta_success, response.mood_delta_success,
+			response.affection_delta_failure, response.familiarity_delta_failure, response.mood_delta_failure
+		),
+		modifiers,
+		initiator, target, initiator_template, target_template, seed_value
+	)
+	result["response_id"] = response.id
+	result["response_text"] = response.text
+	result["line_only"] = false
+	return result
+
+
+## --- Shared roll core --------------------------------------------------------
+
+## Normalise a DialogueTopic or DialogueResponse into one roll-field payload so
+## both resources flow through exactly the same roll/scaling/mutation code.
+static func _roll_fields(
+	id: String, text: String, checked_stat: String, difficulty: int,
+	affection_success: int, familiarity_success: int, mood_success: int,
+	affection_failure: int, familiarity_failure: int, mood_failure: int
+) -> Dictionary:
+	return {
+		"id": id,
+		"text": text,
+		"checked_stat": checked_stat,
+		"difficulty": difficulty,
+		"affection_success": affection_success,
+		"familiarity_success": familiarity_success,
+		"mood_success": mood_success,
+		"affection_failure": affection_failure,
+		"familiarity_failure": familiarity_failure,
+		"mood_failure": mood_failure,
+	}
+
+
+## The single implementation of the threshold check, margin scaling, recipient
+## modifiers, dual-party writes, and relationship re-derivation. Both resolve()
+## and resolve_response() delegate here so the two paths cannot drift.
+static func _resolve_fields(
+	fields: Dictionary,
+	recipient_modifiers: Array,
+	initiator: NpcInstance,
+	target: NpcInstance,
+	initiator_template: CharacterTemplate,
+	target_template: CharacterTemplate,
+	seed_value: int
+) -> Dictionary:
 	# Recipient modifiers adjust the difficulty of the roll and the size of the
 	# deltas *this target receives*. Trait keys are shared with the 014 filter so
 	# ids/tags behave identically in both tickets.
-	var effective_difficulty: int = topic.difficulty
+	var effective_difficulty: int = int(fields.get("difficulty", 0))
 	var recipient_scale: float = 1.0
 	var target_keys: Array[String] = DialogueFilter.trait_keys(target_template)
-	for entry in topic.recipient_modifiers:
+	for entry in recipient_modifiers:
 		if not (entry is Dictionary):
 			continue
 		var modifier: Dictionary = entry
@@ -99,8 +186,9 @@ static func resolve(
 
 	# The threshold check: stat + (familiarity / 10) + random(0..5).
 	var stat_bonus: int = 0
-	if not topic.checked_stat.is_empty():
-		stat_bonus = initiator.get_stat(topic.checked_stat)
+	var checked_stat: String = str(fields.get("checked_stat", ""))
+	if not checked_stat.is_empty():
+		stat_bonus = initiator.get_stat(checked_stat)
 	var initiator_meter: Dictionary = initiator.get_meter(target.instance_id)
 	var familiarity_bonus: int = int(initiator_meter.get("familiarity", 0)) / 10
 
@@ -120,9 +208,9 @@ static func resolve(
 		1.0 + absf(float(margin)) / MARGIN_SCALE_DIVISOR, 1.0, MARGIN_SCALE_MAX
 	)
 
-	var base_affection: int = topic.affection_delta_success if success else topic.affection_delta_failure
-	var base_familiarity: int = topic.familiarity_delta_success if success else topic.familiarity_delta_failure
-	var base_mood: int = topic.mood_delta_success if success else topic.mood_delta_failure
+	var base_affection: int = int(fields.get("affection_success", 0)) if success else int(fields.get("affection_failure", 0))
+	var base_familiarity: int = int(fields.get("familiarity_success", 0)) if success else int(fields.get("familiarity_failure", 0))
+	var base_mood: int = int(fields.get("mood_success", 0)) if success else int(fields.get("mood_failure", 0))
 
 	var initiator_delta: Dictionary = {
 		"affection": roundi(float(base_affection) * margin_scale),
@@ -141,15 +229,15 @@ static func resolve(
 	var after: Dictionary = _snapshot_pair(initiator, target, initiator_template, target_template)
 
 	return {
-		"topic_id": topic.id,
-		"topic_text": topic.text,
+		"topic_id": str(fields.get("id", "")),
+		"topic_text": str(fields.get("text", "")),
 		"success": success,
-		"checked_stat": topic.checked_stat,
+		"checked_stat": checked_stat,
 		"stat_bonus": stat_bonus,
 		"familiarity_bonus": familiarity_bonus,
 		"die": die,
 		"roll": roll,
-		"difficulty": topic.difficulty,
+		"difficulty": int(fields.get("difficulty", 0)),
 		"effective_difficulty": effective_difficulty,
 		"margin": margin,
 		"margin_scale": margin_scale,
@@ -157,11 +245,59 @@ static func resolve(
 		"deltas": {"initiator": initiator_delta, "target": target_delta},
 		"before": before,
 		"after": after,
+		"show_feedback": true,
 		"relationship_changed": (
 			str((before["initiator"] as Dictionary).get("relationship", "")) != str((after["initiator"] as Dictionary).get("relationship", ""))
 			or str((before["target"] as Dictionary).get("relationship", "")) != str((after["target"] as Dictionary).get("relationship", ""))
 		),
 	}
+
+
+## A line-only reaction has no roll and no deltas: before == after, and all roll
+## fields are zeroed so nothing downstream can mistake it for a successful check.
+static func _line_only_result(
+	response: DialogueResponse,
+	initiator: NpcInstance,
+	target: NpcInstance,
+	initiator_template: CharacterTemplate,
+	target_template: CharacterTemplate
+) -> Dictionary:
+	var before: Dictionary = _snapshot_pair(initiator, target, initiator_template, target_template)
+	return {
+		"response_id": response.id,
+		"response_text": response.text,
+		"topic_id": response.topic_id,
+		"topic_text": response.text,
+		"line_only": true,
+		"show_feedback": false,
+		"success": false,
+		"checked_stat": "",
+		"stat_bonus": 0,
+		"familiarity_bonus": 0,
+		"die": 0,
+		"roll": 0,
+		"difficulty": 0,
+		"effective_difficulty": 0,
+		"margin": 0,
+		"margin_scale": 1.0,
+		"recipient_scale": 1.0,
+		"deltas": {"initiator": {}, "target": {}},
+		"before": before,
+		"after": _snapshot_pair(initiator, target, initiator_template, target_template),
+		"relationship_changed": false,
+	}
+
+
+## Find an authored topic by id in the array supplied by the caller. Kept
+## autoload-free on purpose; the pure helper never reaches into the registry.
+static func _find_topic(topics: Array, topic_id: String) -> DialogueTopic:
+	if topic_id.is_empty():
+		return null
+	for item in topics:
+		var topic: DialogueTopic = item as DialogueTopic
+		if topic != null and topic.id == topic_id:
+			return topic
+	return null
 
 
 ## Derive the relationship type one instance holds toward `other` from its

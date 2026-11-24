@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="ProjectRenai"
-run/main_scene="res://scenes/DebugStart.tscn"
+run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.2", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -24,6 +24,7 @@ ModLoader="*res://scripts/ModLoader.gd"
 AudioManager="*res://scripts/AudioManager.gd"
 LocalizationManager="*res://scripts/LocalizationManager.gd"
 ChunkManager="*res://scripts/ChunkManager.gd"
+SettingsManager="*res://scripts/SettingsManager.gd"
 
 [input]
 

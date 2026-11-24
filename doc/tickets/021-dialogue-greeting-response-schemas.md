@@ -4,11 +4,11 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] `DialogueGreeting` resource class exists with identity, text, eligibility, and weight fields
-- [ ] `DialogueResponse` resource class exists with identity, text, topic id, outcome, relationship band, and optional roll/delta fields
-- [ ] `ModLoader` has `TYPE_GREETING` and `TYPE_RESPONSE` buckets with add-only registration
-- [ ] A `.tres` of each new type can be created, saved, and round-tripped in the editor
-- [ ] Empty roll fields on a `DialogueResponse` are documented as "line-only reaction"
-- [ ] All fields are typed and documented with comments
+- [x] `DialogueGreeting` resource class exists with identity, text, eligibility, and weight fields
+- [x] `DialogueResponse` resource class exists with identity, text, topic id, outcome, relationship band, and optional roll/delta fields
+- [x] `ModLoader` has `TYPE_GREETING` and `TYPE_RESPONSE` buckets with add-only registration
+- [x] A `.tres` of each new type can be created, saved, and round-tripped in the editor
+- [x] Empty roll fields on a `DialogueResponse` are documented as "line-only reaction"
+- [x] All fields are typed and documented with comments

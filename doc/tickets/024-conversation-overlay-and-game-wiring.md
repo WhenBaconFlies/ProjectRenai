@@ -4,13 +4,22 @@
 
 **Blocked by:** 023 (Conversation helper + filter/resolver extensions)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A player-initiated talk shows a greeting, accepts a topic, shows a reactive NPC line, and allows at most two picks
-- [ ] The overlay is semi-transparent at the bottom with speaker name and choices; the world remains visible behind it
-- [ ] Portrait slots exist as placeholders but render no art
-- [ ] Feedback appears after each turn and the relationship type updates visibly
-- [ ] An NPC-initiated talk speaks its topic with no deltas, offers 2–3 filtered replies, resolves the player's reply, and ends
-- [ ] The player's input is locked for the duration of either conversation shape
-- [ ] NPC initiation only fires in free time via a callable/condition, with no crash when no candidates exist
-- [ ] The existing one-pick close path is fully replaced
+- [x] A player-initiated talk shows a greeting, accepts a topic, shows a reactive NPC line, and allows at most two picks
+- [x] The overlay is semi-transparent at the bottom with speaker name and choices; the world remains visible behind it
+- [x] Portrait slots exist as placeholders but render no art
+- [x] Feedback appears after each turn and the relationship type updates visibly
+- [x] An NPC-initiated talk speaks its topic with no deltas, offers 2–3 filtered replies, resolves the player's reply, and ends
+- [x] The player's input is locked for the duration of either conversation shape
+- [x] NPC initiation only fires in free time via a callable/condition, with no crash when no candidates exist
+- [x] The existing one-pick close path is fully replaced
+
+## Verification
+
+- Persistent harness: `tests/ConversationUIBootstrap.*`, `tests/ConversationUITest.gd`, `tests/run_conversation_ui_tests.ps1` — **42/42 checks pass** (`ALL_024_CHECKS_PASSED`, `CONVERSATION_024_OK`). It covers overlay layout/portrait placeholders, both conversation shapes, input lock, the callable gate, no-candidate safety, and the 2-pick limit at the real `Game.tscn` seam.
+- Regressions re-run green: 018 (42/42), 019 (60/60), 020 (58/58), 021 (23/23), 022 (23/23), 023 (35/35). The 022 harness's response-count expectation was raised from 27 to 32 and its comment records ticket 024's five extra authored replies; the total stays at the spec's 60 dialogue resources.
+- Editor pass (user feedback): the feedback panel moved from bottom-centre to the right-middle so it no longer covers the conversation overlay (the compact trend-only indicator remains a later change); NPCs now walk to within `npc_talk_radius` of the player before an NPC-initiated overlay opens, with a timeout and player-moved-away retry. Both behaviors are covered by new checks T41–T43.
+- RED/GREEN proof: temporarily setting `Conversation.MAX_TURNS = 3` made T20 fail (40 passed / 2 failed, `CONVERSATION_024_FAILED`); restoring `MAX_TURNS = 2` returned 42/42 (`ALL_024_CHECKS_PASSED`).
+- Builder decisions and user approvals recorded in `doc/idea-v2-decisions.md` under "Ticket 024 — conversation overlay + game wiring decisions".
+- Code review: `doc/code-review/codereview-ticket-024-conversation-overlay-and-game-wiring.md` (9 findings: 4 Medium, 5 Low, merged from two independent passes). All nine were applied — swapped feedback labels, reply-supported opening-topic filter, stale-button detach, dead seed parameter and duplicated NPC field removed, stale comment corrected, and the harness extended with mouse-path, production-gate and feedback-label checks — giving 42 checks including the editor-pass fixes.

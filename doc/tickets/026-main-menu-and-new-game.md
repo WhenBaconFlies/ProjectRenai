@@ -4,11 +4,11 @@
 
 **Blocked by:** 024 (ConversationUI overlay + Game wiring)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] `MainMenu` is `run/main_scene` and displays the five buttons
-- [ ] New Game starts the default debug day with the shipped map and player template
-- [ ] Load Game, Options, and Mods Menu buttons route to their screens or a safe placeholder
-- [ ] Quit exits cleanly
-- [ ] DebugStart still launches the game directly for developers
-- [ ] No regression in the v1 day-loop harness launch path
+- [x] `MainMenu` is `run/main_scene` and displays the five buttons
+- [x] New Game starts the default debug day with the shipped map and player template
+- [x] Load Game, Options, and Mods Menu buttons route to their screens or a safe placeholder
+- [x] Quit exits cleanly
+- [x] DebugStart still launches the game directly for developers
+- [x] No regression in the v1 day-loop harness launch path

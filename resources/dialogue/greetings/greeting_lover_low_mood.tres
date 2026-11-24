@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DialogueGreeting" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueGreeting.gd" id="1_greeting"]
+
+[resource]
+script = ExtResource("1_greeting")
+id = "greeting:lover_low_mood"
+text = "Hey... it's been a rough day. Can we just sit together for a while?"
+relationship_types = PackedStringArray("Lover")
+min_mood = 0
+max_mood = 35
+periods = PackedStringArray("FREETIME1", "FREETIME2", "FREETIME3")
+required_traits = PackedStringArray()
+required_interests = PackedStringArray()
+weight = 1.3
