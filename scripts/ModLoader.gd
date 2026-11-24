@@ -1,11 +1,14 @@
 ## ModLoader
 ##
 ## Global singleton (autoload) that provides the v1 modding seam:
-##   1. Discover mod folders under res://mods/ (or another root, for tests).
+##   1. Discover mod folders under res://mods/ AND user://mods/ (or explicit
+##      roots, for tests), with bundled content scanned first.
 ##   2. Validate each mod's mod.json manifest.
 ##   3. Resolve dependencies in topological order, rejecting cycles.
 ##   4. Load each mod's content resources into typed ID -> Resource registries.
-##   5. Honour enable/disable flags and skip invalid mods with a log, never crash.
+##   5. Honour enable/disable flags from SettingsManager and skip invalid mods
+##      with a log, never crash. The v1 res:// .disabled marker is no longer a
+##      disable source (ticket 029); player toggles live in user://settings.cfg.
 ##
 ## The registries live here (no separate autoload): later tickets (NPC spawning,
 ## dialogue filtering, save linkage) look resources up by stable ID through
@@ -18,6 +21,11 @@
 ## they follow the same add-only rules as `dialogue`. Ticket 022 adds authored
 ## traits (res://resources/traits/) to the existing `trait` bucket so every
 ## piece of content, not just dialogue, loads through one base-registration path.
+##
+## Ticket 029 adds a second scan root. The add-only rule still applies across
+## both roots, so a duplicate id in user://mods/ is skipped rather than allowed
+## to override a bundled mod. Disabled mods are filtered out before dependency
+## resolution so they neither satisfy dependencies nor take part in cycles.
 extends Node
 
 ## --- Registry bucket names -------------------------------------------------
@@ -31,8 +39,14 @@ const TYPE_RESPONSE: String = "response"
 
 ## --- Filesystem conventions ------------------------------------------------
 const DEFAULT_MODS_ROOT: String = "res://mods/"
+## User-writable root for mods installed without editing the game directory. In
+## an exported build res:// is read-only, so this is where the Mods Menu's mods
+## live and where enable/disable flags are meaningful.
+const USER_MODS_ROOT: String = "user://mods/"
+## Scan order is significant: bundled content registers first, so add-only
+## conflict resolution can never let a user mod silently override a bundled id.
+const DEFAULT_MODS_ROOTS: Array = [DEFAULT_MODS_ROOT, USER_MODS_ROOT]
 const MANIFEST_FILE: String = "mod.json"
-const DISABLED_MARKER: String = ".disabled"
 
 ## Authored (non-mod) character templates loaded directly from res://. They are
 ## registered before mod content so v1's add-only rule lets mods add new ids but
@@ -69,8 +83,8 @@ var _loaded_mods: Array[String] = []
 ## Each entry: { "mod": String, "status": "loaded"|"skipped", "reason": String }
 var _last_report: Array = []
 
-## The root path scanned by the most recent load_mods() call.
-var _mods_root: String = DEFAULT_MODS_ROOT
+## Root paths scanned by the most recent load_mods() call, in scan order.
+var _mods_roots: Array[String] = [DEFAULT_MODS_ROOT, USER_MODS_ROOT]
 
 ## True while load_mods() is running. Entry hooks receive this autoload, so a
 ## re-entrant load_mods() call must not wipe registries mid-load.
@@ -145,16 +159,32 @@ func get_last_report() -> Array:
 	return _last_report.duplicate(true)
 
 
-## Root path used by the most recent scan.
+## First root used by the most recent scan. Kept for v1 callers; new code should
+## use get_mods_roots() because the default scan now covers two roots.
 func get_mods_root() -> String:
-	return _mods_root
+	return _mods_roots[0] if not _mods_roots.is_empty() else ""
+
+
+## All roots used by the most recent scan, in scan order (copy).
+func get_mods_roots() -> Array[String]:
+	return _mods_roots.duplicate()
 
 
 ## --- Loading pipeline ------------------------------------------------------
 
-## (Re)load all mods from `root_path`. Clears every registry first so the
-## function is idempotent and testable (tests can point it at user:// trees).
-func load_mods(root_path: String = DEFAULT_MODS_ROOT) -> void:
+## (Re)load mods. With no argument both DEFAULT_MODS_ROOTS are scanned (the v2
+## default). Passing a single path keeps the v1 test seam: only that one root is
+## scanned, so a harness can point ModLoader at a synthetic user:// tree.
+func load_mods(root_path: String = "") -> void:
+	if root_path.is_empty():
+		load_mods_from_roots(DEFAULT_MODS_ROOTS)
+	else:
+		load_mods_from_roots([root_path])
+
+
+## (Re)load all mods from `root_paths`, in the given order. Clears every registry
+## first so the function is idempotent and testable.
+func load_mods_from_roots(root_paths: Array) -> void:
 	# An entry hook is handed `self`; without this guard it could call
 	# load_mods() again and clear registries while the outer load is running.
 	if _is_loading:
@@ -163,17 +193,29 @@ func load_mods(root_path: String = DEFAULT_MODS_ROOT) -> void:
 	_is_loading = true
 	_reset_registries()
 	_register_base_content()
-	_mods_root = root_path
+	_mods_roots.clear()
+	for path in root_paths:
+		_mods_roots.append(str(path))
 
-	var mods: Dictionary = _discover_mods(root_path)
-	var resolution: Dictionary = _resolve_order(mods)
+	# Discovery merges every root into one id -> manifest map. A duplicate id in
+	# a later root is rejected here, preserving the bundled root's mod.
+	var mods: Dictionary = {}
+	for root_path in _mods_roots:
+		_discover_mods(root_path, mods)
+
+	# Player toggles live in SettingsManager. Filtering before the sort keeps a
+	# disabled mod out of cycles and out of dependency satisfaction entirely.
+	var enabled_mods: Dictionary = _enabled_mods(mods)
+	var resolution: Dictionary = _resolve_order(enabled_mods)
 	var order: Array = resolution["order"]
 
 	for mod_id in order:
-		_load_one_mod(str(mod_id), mods)
+		_load_one_mod(str(mod_id), enabled_mods)
 
 	_is_loading = false
-	_log("Loaded %d mod(s); %d resource(s) registered." % [_loaded_mods.size(), _resource_count()])
+	_log("Loaded %d mod(s); %d resource(s) registered from %d root(s)." % [
+		_loaded_mods.size(), _resource_count(), _mods_roots.size()
+	])
 
 
 func _reset_registries() -> void:
@@ -251,14 +293,16 @@ func _base_resource_paths(dir_path: String) -> Array[String]:
 	return paths
 
 
-## Scan `root_path` for direct subfolders that are mod candidates.
-## Returns { mod id -> validated manifest Dictionary }.
-func _discover_mods(root_path: String) -> Dictionary:
-	var mods: Dictionary = {}
+## Scan `root_path` for direct subfolders that are mod candidates and merge the
+## validated manifests into `mods`. Scan order is the caller's responsibility:
+## an id already present is skipped, so the earlier (bundled) root wins.
+func _discover_mods(root_path: String, mods: Dictionary) -> void:
 	var dir: DirAccess = DirAccess.open(root_path)
 	if dir == null:
-		_log("WARN: cannot open mods directory '%s' (error %d); skipping mod scan" % [root_path, DirAccess.get_open_error()])
-		return mods
+		# A missing root is normal for user://mods/ on a fresh install: warn but
+		# keep scanning the other roots.
+		_log("WARN: cannot open mods directory '%s' (error %d); skipping this root" % [root_path, DirAccess.get_open_error()])
+		return
 
 	dir.list_dir_begin()
 	var entry: String = dir.get_next()
@@ -291,7 +335,36 @@ func _discover_mods(root_path: String) -> Dictionary:
 						mods[mod_id] = manifest
 		entry = dir.get_next()
 	dir.list_dir_end()
-	return mods
+
+
+## Return only the mods the player/author has enabled. Disabled mods get a
+## report entry here so the diagnostics still explain why they did not load.
+func _enabled_mods(mods: Dictionary) -> Dictionary:
+	var enabled: Dictionary = {}
+	for id in mods.keys():
+		var mod_id: String = str(id)
+		var manifest: Dictionary = mods[id]
+		var reason: String = ""
+		if manifest.has("enabled") and manifest["enabled"] == false:
+			reason = "disabled (manifest enabled=false)"
+		elif not _mod_enabled_from_settings(mod_id):
+			reason = "disabled (settings flag)"
+		if reason.is_empty():
+			enabled[mod_id] = manifest
+		else:
+			_log("SKIP mod '%s': %s" % [mod_id, reason])
+			_add_report(mod_id, "skipped", reason, str(manifest.get("_folder_path", "")))
+	return enabled
+
+
+## Player toggle source. get_node_or_null keeps a missing or not-yet-ready
+## SettingsManager autoload a soft "enabled" instead of a hard failure; project
+## autoload order puts SettingsManager before ModLoader on the normal path.
+func _mod_enabled_from_settings(mod_id: String) -> bool:
+	var settings: Node = get_node_or_null("/root/SettingsManager")
+	if settings == null or not settings.has_method("get_mod_enabled"):
+		return true
+	return bool(settings.call("get_mod_enabled", mod_id))
 
 
 ## Validate the parsed manifest. Returns
@@ -373,15 +446,8 @@ func _load_one_mod(mod_id: String, mods: Dictionary) -> void:
 	var manifest: Dictionary = mods[mod_id]
 	var folder: String = str(manifest.get("_folder_path", ""))
 
-	# 1. Enable/disable flag.
-	if manifest.has("enabled") and manifest["enabled"] == false:
-		_log("SKIP mod '%s': disabled (enabled=false)" % mod_id)
-		_add_report(mod_id, "skipped", "disabled", folder)
-		return
-	if FileAccess.file_exists(_join(folder, DISABLED_MARKER)):
-		_log("SKIP mod '%s': disabled (%s marker)" % [mod_id, DISABLED_MARKER])
-		_add_report(mod_id, "skipped", "disabled", folder)
-		return
+	# 1. Enable/disable was already applied by _enabled_mods() before the sort.
+	#    The v1 .disabled marker is deliberately not consulted (ticket 029).
 
 	# 2. Dependencies must have loaded earlier in topological order.
 	for dep in manifest.get("dependencies", []):

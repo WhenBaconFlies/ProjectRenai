@@ -19,6 +19,8 @@ extends Node
 
 ## Root of the synthetic mod tree used for mod-discovery checks.
 const MODS_TEST_ROOT: String = "user://integration_mods/"
+## Isolated settings store for ticket 029's settings-based disable check (AC6).
+const INTEGRATION_SETTINGS_PATH: String = "user://integration_settings.cfg"
 ## Named slot used for the save/reload part of the day-loop seam.
 const INTEGRATION_SLOT: String = "integration"
 ## Slot carrying an instance whose template id cannot be resolved.
@@ -349,15 +351,19 @@ func _check_mods() -> void:
 		"AC6: disabled mod's resources excluded"
 	)
 
-	# File-based disable: a .disabled marker must exclude an otherwise valid mod.
-	_write_text(MODS_TEST_ROOT + "valid/.disabled", "")
+	# v2 disable source (ticket 029): a settings flag excludes an otherwise
+	# valid mod. Redirect storage first so the developer's real settings.cfg is
+	# never written by a harness.
+	var original_settings_path: String = SettingsManager.get_config_path()
+	SettingsManager.set_config_path(INTEGRATION_SETTINGS_PATH)
+	SettingsManager.set_mod_enabled("integration_valid", false)
 	ModLoader.load_mods(MODS_TEST_ROOT)
 	_check(
 		not ModLoader.has_resource(ModLoader.TYPE_DIALOGUE, "topic:integration_valid"),
-		"AC6: .disabled marker excludes a mod's resources"
+		"AC6: a settings flag excludes a mod's resources"
 	)
-
-	_remove_file(MODS_TEST_ROOT + "valid/.disabled")
+	SettingsManager.clear_mod_flag("integration_valid")
+	SettingsManager.set_config_path(original_settings_path)
 	# Restore the real registries so later checks see the shipped base content.
 	ModLoader.load_mods()
 
@@ -429,6 +435,7 @@ func _restore_environment() -> void:
 	elif FileAccess.file_exists(autosave_path):
 		SaveManager.delete_slot(SaveManager.AUTOSAVE_SLOT)
 	_remove_dir_recursive(MODS_TEST_ROOT)
+	_remove_file(INTEGRATION_SETTINGS_PATH)
 
 
 ## Recursively delete a user:// directory tree. Godot 4.2 has no single-call
