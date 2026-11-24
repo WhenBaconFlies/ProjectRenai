@@ -23,6 +23,7 @@ const MODS_SCENE: String = "res://scenes/ModsMenu.tscn"
 ## live game instead of returning to pause (in-editor finding 1).
 const LOAD_SCENE: String = "res://scenes/LoadGame.tscn"
 const ROUTE_RESUME: String = "resume"
+const ROUTE_MAIN_MENU: String = "main_menu"
 
 @onready var _box: PanelContainer = $Box
 @onready var _status_label: Label = $Box/MenuBox/StatusLabel
@@ -32,6 +33,7 @@ const ROUTE_RESUME: String = "resume"
 @onready var _options_button: Button = $Box/MenuBox/OptionsButton
 @onready var _mods_button: Button = $Box/MenuBox/ModsButton
 @onready var _resume_button: Button = $Box/MenuBox/ResumeButton
+@onready var _main_menu_button: Button = $Box/MenuBox/MainMenuButton
 @onready var _panel_host: Control = $PanelHost
 
 ## Currently embedded Options/Mods screen, or null when the main box is shown.
@@ -44,6 +46,7 @@ func _ready() -> void:
 	_options_button.pressed.connect(_on_options_pressed)
 	_mods_button.pressed.connect(_on_mods_pressed)
 	_resume_button.pressed.connect(_on_resume_pressed)
+	_main_menu_button.pressed.connect(_on_main_menu_pressed)
 	close()
 
 
@@ -121,6 +124,13 @@ func _set_status(message: String) -> void:
 
 func _on_resume_pressed() -> void:
 	route_requested.emit(ROUTE_RESUME)
+
+
+## Game.gd resumes the live scene first, then the Main Menu scene swap runs;
+## Game._exit_tree() stops the day clock so a later New Game starts fresh.
+func _on_main_menu_pressed() -> void:
+	_close_embedded()
+	route_requested.emit(ROUTE_MAIN_MENU)
 
 
 func _on_load_pressed() -> void:

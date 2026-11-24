@@ -68,6 +68,6 @@ The first fix attempt used `set_input_as_handled()` directly on `Node`; Godot 4.
 
 ## Final verification (after all fixes)
 
-- `tests/run_pause_menu_tests.ps1`: `ALL_028_CHECKS_PASSED`, `PAUSE_MENU_028_OK`, 42/42.
+- `tests/run_pause_menu_tests.ps1`: `ALL_028_CHECKS_PASSED`, `PAUSE_MENU_028_OK`, 43/43. Includes the user-requested `Return to Main Menu` button (T43): resumes the live scene, routes via `GameManager.show_main_menu()`, and leaves the day clock stopped.
 - Regressions: 018 (42/42), 019, 020, 021 (23/23), 022 (23/23), 023 (35/35), 024 (42/42), 025 (21/21), 026 (23/23), 027 (35/35) — all `_OK`.
 - No source files were modified by the reviewer; fixes were applied by the implementer and re-verified.

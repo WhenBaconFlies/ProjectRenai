@@ -8,7 +8,7 @@
 ## the pause and conversation overlays. Prints ALL_028_CHECKS_PASSED on a full pass.
 extends Node
 
-const EXPECTED_CHECKS: int = 42
+const EXPECTED_CHECKS: int = 43
 const SLOT: String = "pause_ui_alpha"
 
 var _passed: int = 0
@@ -85,6 +85,7 @@ func _run() -> void:
 		["Box/MenuBox/OptionsButton", "Options"],
 		["Box/MenuBox/ModsButton", "Mods Menu"],
 		["Box/MenuBox/ResumeButton", "Resume"],
+		["Box/MenuBox/MainMenuButton", "Return to Main Menu"],
 	]
 	var labels_ok: bool = true
 	for entry in expected_buttons:
@@ -290,6 +291,10 @@ func _run() -> void:
 		and TimeManager.is_running() and not TimeManager.is_paused(),
 		"T41: leaving through menus stops the day so the next New Game restarts it")
 
+	# The first game's pause node was freed by the scene swaps; re-acquire it.
+	game = replay
+	pause = replay.get_node_or_null("PauseLayer/PauseMenu")
+
 	TimeManager.advance(46.0)
 	await _frames(2)
 	var replay_npcs: Node = replay.get_node_or_null("Npcs")
@@ -301,6 +306,18 @@ func _run() -> void:
 				ai_ready = true
 				break
 	_check(ai_ready, "T42: NPCs receive free-time goals after that fresh New Game")
+
+	# The pause menu's Main Menu button resumes the live scene first, then swaps
+	# to MainMenu.tscn and stops the day clock on Game exit.
+	_send_action(replay, "ui_cancel")
+	await _frames(2)
+	var main_menu_button: Button = pause.get_node_or_null("Box/MenuBox/MainMenuButton") as Button
+	main_menu_button.pressed.emit()
+	await _settle()
+	_check(get_tree().current_scene != null
+		and get_tree().current_scene.name == "MainMenu"
+		and not TimeManager.is_running() and not TimeManager.is_paused(),
+		"T43: Return to Main Menu leaves gameplay with the clock stopped")
 
 	_check(_passed == EXPECTED_CHECKS - 1, "FINAL: every planned check ran")
 

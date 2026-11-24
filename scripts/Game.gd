@@ -532,8 +532,10 @@ func close_pause() -> void:
 	print("[Game] resumed")
 
 
-func _on_pause_route_requested(_screen: String) -> void:
+func _on_pause_route_requested(screen: String) -> void:
 	close_pause()
+	if screen == "main_menu":
+		GameManager.show_main_menu()
 
 
 ## No gameplay scene means no running day. Leaving _running true here made the
