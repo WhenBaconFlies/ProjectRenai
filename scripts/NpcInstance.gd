@@ -10,8 +10,9 @@ extends Resource
 ## `template_id` string, never by path or UID, so saves survive template moves.
 ##
 ## v1 uses this single shape for NPCs; later tickets reuse it for the player.
-## `tier` is runtime-only chunk-loading state (ticket 019) and is deliberately
-## NOT exported, so ResourceSaver does not persist it — ticket 017 recomputes it.
+## `tier` and `coarse_position` are runtime-only chunk-loading state (ticket 019)
+## and are deliberately NOT exported, so ResourceSaver does not persist them —
+## ticket 017 recomputes both from the player's position on load.
 
 
 ## --- Chunk-loading tier constants (post-v1) --------------------------------
@@ -67,6 +68,11 @@ const TIER_FAR: String = "far"
 
 ## Chunk-loading tier. Unexported so it stays out of saves; recomputed on load.
 var tier: String = TIER_CLOSE
+
+## Runtime-only position used by far-tier coarse (straight-line) simulation and
+## as the interpolation start point when a promoted NPC becomes visible again.
+## Mirrors `position` while far; excluded from snapshot() with `tier`.
+var coarse_position: Vector2 = Vector2.ZERO
 
 
 ## --- Construction -----------------------------------------------------------

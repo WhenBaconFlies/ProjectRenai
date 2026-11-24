@@ -126,6 +126,7 @@ func _ready() -> void:
 	_setup_player_instance()
 	_setup_dialogue()
 	_setup_feedback()
+	_setup_chunk_manager()
 	# 014 emits the selection before closing the conversation; resolving here
 	# keeps the pure resolver out of the UI scripts and the scene tree entirely.
 	if not dialogue_topic_selected.is_connected(_on_dialogue_topic_selected):
@@ -198,6 +199,19 @@ func _setup_player_instance() -> void:
 	# Both sides of a conversation must resolve through one id map so tickets
 	# 015/016 can apply deltas uniformly (including player-targeted interactions).
 	_instances_by_id[_player_instance.instance_id] = _player_instance
+
+
+## --- Ticket 019: tiered simulation ------------------------------------------
+
+## Hand the spawned/restored NPCs and the player focus to ChunkManager. Tiers
+## are runtime-only, so this is also the recompute-on-load seam: no tier state
+## is read from the save, only the player's position.
+func _setup_chunk_manager() -> void:
+	if ChunkManager == null:
+		push_warning("Game: ChunkManager autoload missing; tiered simulation disabled")
+		return
+	var player_node := get_node_or_null("Player") as Node2D
+	ChunkManager.setup(player_node, _npcs, _map)
 
 
 ## --- Ticket 017: save / load -------------------------------------------------
@@ -318,6 +332,11 @@ func _apply_restored_player_position() -> void:
 	var player_node := get_node_or_null("Player") as Node2D
 	if player_node != null and _player_instance != null:
 		player_node.global_position = _player_instance.position
+	# Tiers were first computed from the spawn position in _setup_chunk_manager;
+	# the saved player position wins once the deferred snap above has run.
+	if ChunkManager != null:
+		ChunkManager.set_focus(player_node)
+		ChunkManager.refresh_tiers()
 
 
 ## Enable/disable AI from the current day state. Used both by normal state
@@ -402,10 +421,16 @@ func _on_interaction_requested(target: Npc) -> void:
 		return
 	if target.is_conversation_busy():
 		return
-	# Ticket 016: the player must not open a second conversation with a character
-	# already locked by an NPC-initiated interaction.
+	# Ticket 016: reject an already-claimed character BEFORE promotion. Promotion
+	# mutates tier, visibility, nav target and interpolation state (review #3).
 	if _initiation_busy.has(target.instance.instance_id):
 		return
+	# Ticket 019: only close-tier NPCs are interactable in the steady state.
+	# An explicit attempt on a near/far NPC promotes it first, so a tier-update
+	# lag or a zoomed-out camera never dead-ends the interaction.
+	if ChunkManager != null and not ChunkManager.is_interactable(target):
+		if not ChunkManager.promote_for_interaction(target):
+			return
 
 	var topics: Array = []
 	var loader: Node = NpcInstance._mod_loader()
@@ -545,6 +570,9 @@ func _try_npc_initiations() -> void:
 			continue
 		if candidate.is_conversation_busy() or candidate.is_forced_destination():
 			continue
+		# Ticket 019: steady-state interactions are close-tier only.
+		if ChunkManager != null and not ChunkManager.is_interactable(candidate):
+			continue
 		if not NpcInitiation.can_initiate(
 			candidate.instance, candidate.instance.resolve_template(), false, false
 		):
@@ -595,6 +623,8 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 		if target_id == initiator_id or _initiation_busy.has(target_id):
 			continue
 		if npc.is_conversation_busy() or npc.is_forced_destination():
+			continue
+		if ChunkManager != null and not ChunkManager.is_interactable(npc):
 			continue
 		var weight: float = NpcInitiation.target_weight(
 			initiator_instance, npc.instance, initiator_template,

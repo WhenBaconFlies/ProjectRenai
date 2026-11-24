@@ -23,6 +23,7 @@ TimeManager="*res://scripts/TimeManager.gd"
 ModLoader="*res://scripts/ModLoader.gd"
 AudioManager="*res://scripts/AudioManager.gd"
 LocalizationManager="*res://scripts/LocalizationManager.gd"
+ChunkManager="*res://scripts/ChunkManager.gd"
 
 [input]
 

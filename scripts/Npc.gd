@@ -90,6 +90,12 @@ var _travel_timeout: float = -1.0
 var _avoid_elapsed: float = 0.0
 var _avoid_point: Vector2 = Vector2.ZERO
 
+## True when the ChunkManager autoload owns this NPC's simulation ticks. While
+## set, _physics_process() does not simulate; ChunkManager calls simulate_tick()
+## at the rate appropriate to this NPC's tier. Unmanaged NPCs (e.g. headless
+## helpers constructed directly) keep the legacy per-frame path.
+var chunk_managed: bool = false
+
 ## True while this NPC is the target of an open conversation (ticket 014).
 ## Movement freezes for the duration, but the active goal and navigation target
 ## are deliberately preserved so the NPC resumes where it left off. Ticket 016
@@ -283,6 +289,42 @@ func evaluate_goal() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# ChunkManager drives managed NPCs at their tier's tick rate. Leaving this
+	# guard here keeps directly-constructed NPCs working without the autoload.
+	if chunk_managed:
+		return
+	_simulate(delta, false)
+
+
+## ChunkManager tick-scheduler entry point. `coarse` selects far-tier
+## straight-line stepping (no navmesh path, collision or obstacle sliding).
+func simulate_tick(dt: float, coarse: bool) -> void:
+	_simulate(dt, coarse)
+
+
+## Hand this NPC's simulation over to (or back from) ChunkManager.
+func set_chunk_managed(enabled: bool) -> void:
+	chunk_managed = enabled
+	if enabled:
+		velocity = Vector2.ZERO
+
+
+## After a promotion the authoritative position may have moved (e.g. a class
+## snap performed while far). Re-aim the navigation agent so fine simulation
+## resumes toward the saved goal instead of an old target.
+func reconcile_after_promotion() -> void:
+	velocity = Vector2.ZERO
+	_last_position = global_position
+	if instance != null:
+		instance.coarse_position = global_position
+		if not instance.current_goal.is_empty() and navigation_agent != null:
+			navigation_agent.target_position = instance.goal_destination
+
+
+## Shared simulation step for the legacy per-frame path (coarse=false) and the
+## ChunkManager scheduler (coarse=true for far tier). All AI/state rules are
+## identical; only the movement strategy differs.
+func _simulate(delta: float, coarse: bool) -> void:
 	if not _ai_enabled or instance == null or _conversation_busy:
 		return
 
@@ -311,6 +353,13 @@ func _physics_process(delta: float) -> void:
 		if _travel_timeout <= 0.0:
 			_arrive()
 			return
+
+	# Far tier: one straight-line step with the accumulated large dt. No navmesh
+	# query, no physics collision and no obstacle sliding — coarse pathfinding
+	# intentionally ignores furniture. Identity/state stay on `instance`.
+	if coarse:
+		_simulate_coarse(delta, destination)
+		return
 
 	# Prefer the navigation path. If the agent has no usable path — or a stall
 	# forced the fallback — steer straight toward the destination until the goal
@@ -355,6 +404,27 @@ func _physics_process(delta: float) -> void:
 				break
 
 	_update_stall(delta)
+
+
+## Straight-line far-tier step. Moves the body directly (no move_and_slide),
+## mirroring the result into both the authoritative position and the runtime-only
+## coarse position. The step is clamped so a large dt cannot overshoot the goal.
+func _simulate_coarse(delta: float, destination: Vector2) -> void:
+	var direction: Vector2 = destination - global_position
+	var remaining: float = direction.length()
+	if remaining <= _target_distance():
+		_arrive()
+		# Keep the coarse mirror consistent even on the arrival tick (review #4).
+		instance.coarse_position = instance.position
+		return
+	var step_length: float = minf(move_speed * maxf(0.0, delta), remaining)
+	if direction.length_squared() > 0.0:
+		direction = direction.normalized()
+	velocity = Vector2.ZERO
+	global_position += direction * step_length
+	instance.position = global_position
+	instance.coarse_position = global_position
+	_last_position = global_position
 
 
 ## Distance from the node to a world-space point.
