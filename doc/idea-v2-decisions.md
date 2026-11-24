@@ -123,6 +123,16 @@ Resolved the schema defaults deferred below; these are the contracts ticket 021 
 - **Testability seam:** `set_config_path(path)` redirects the ConfigFile so the headless harness uses `user://settings_manager_test.cfg` and never touches the developer's real settings. `reload()` re-reads from disk and re-applies.
 - **Robustness:** a missing, unparseable, or wrong-typed ConfigFile value falls back to the typed default with a warning log; `load()` errors never crash or overwrite the file until an explicit save.
 
+## Ticket 026 — Main Menu + New Game routing decisions
+
+- **Routing surface:** `GameManager` gains named scene constants (`SCENE_MAIN_MENU`, `SCENE_LOAD_GAME`, `SCENE_OPTIONS`, `SCENE_MODS_MENU`, `SCENE_GAME`) and `show_main_menu()` / `show_load_game()` / `show_options()` / `show_mods_menu()` / `quit_game()` helpers. Menu scripts call those helpers only; `change_scene()` stays the low-level seam. Later tickets replace the target scenes, not the routes.
+- **Entry point:** `run/main_scene` becomes `res://scenes/MainMenu.tscn`. `DebugStart.tscn` and `DebugStart.gd` are unchanged; the v1 integration harness boots it explicitly through `GameManager.change_scene()`, so that path is preserved verbatim.
+- **New Game:** the button calls `GameManager.start_fresh_day()` — no wizard, no new state. Verified headlessly to enter `Game.tscn` with `current_save == null`, day 1 / `PERIOD1`, the shipped `map:school_debug_large`, and the shipped `char:alex` player template.
+- **Placeholder screens (builder choice):** `LoadGame.tscn`, `Options.tscn`, and `ModsMenu.tscn` are real, minimal scenes backed by one shared `PlaceholderScreen.gd` that names the screen and offers a Back button routed to `GameManager.show_main_menu()`. They exist so the routes are navigable and testable now; tickets 027/030/031 replace each scene's script/content in place. No toast-only placeholders, so navigation cannot dead-end.
+- **Quit test seam (builder choice):** `MainMenu.quit_action: Callable` with `set_quit_action()` mirrors `Game.set_npc_initiation_gate()`. The default calls `GameManager.quit_game()` → `get_tree().quit()`; the harness injects a recording callable so a Quit press is observable without ending the runner.
+- **Visual style (builder choice):** no art assets in v2 — dark full-rect background, centered VBox, generated labels and buttons, following the v1 "simple but cute" convention. Button labels are exactly `New Game`, `Load Game`, `Options`, `Mods Menu`, `Quit`.
+- **Verification (builder choice):** a dedicated headless harness (`tests/MainMenuBootstrap.*`, `tests/MainMenuTest.gd`, `tests/run_main_menu_tests.ps1`) checks the main-scene setting, five buttons, one-shot Quit, New Game's fresh debug day, all three placeholder routes + Back, and the DebugStart launch regression; the v1/v2 harnesses re-run as regressions.
+
 ## to-spec decisions (v2)
 - **Testing seam:** one persistent integration harness at the highest seam (menus/New Game → conversation → menus/settings/mods → save/reopen → relationship goal), reusing v1's marker-based pass/fail pattern; v1 harnesses re-run as regressions.
 - **Issue tracker:** v2 spec published as a GitHub issue with `ready-for-agent` label.

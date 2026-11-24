@@ -6,6 +6,15 @@
 ## this is the stable entry point other systems talk to.
 extends Node
 
+## --- Ticket 026: menu / gameplay scene routes ------------------------------
+## Scene paths are centralised here so menu buttons and later tickets (027–031)
+## share one routing surface. `change_scene()` remains the low-level seam.
+const SCENE_MAIN_MENU: String = "res://scenes/MainMenu.tscn"
+const SCENE_LOAD_GAME: String = "res://scenes/LoadGame.tscn"
+const SCENE_OPTIONS: String = "res://scenes/Options.tscn"
+const SCENE_MODS_MENU: String = "res://scenes/ModsMenu.tscn"
+const SCENE_GAME: String = "res://scenes/Game.tscn"
+
 ## The currently loaded save resource. `null` means "no save / fresh start",
 ## which is the default state DebugStart exercises.
 var current_save = null
@@ -26,7 +35,34 @@ func start_fresh_day() -> void:
 	# The Game scene starts the clock in its own _ready(), after all of its
 	# children (and their listeners) exist. change_scene_to_file() defers the
 	# swap past this call, so starting here would emit day_started too early.
-	change_scene("res://scenes/Game.tscn")
+	change_scene(SCENE_GAME)
+
+
+## --- Ticket 026: menu routing helpers -------------------------------------
+
+## Return to the player-facing main menu.
+func show_main_menu() -> void:
+	change_scene(SCENE_MAIN_MENU)
+
+
+## Route to the Load Game screen (a safe placeholder in ticket 026).
+func show_load_game() -> void:
+	change_scene(SCENE_LOAD_GAME)
+
+
+## Route to the Options screen (a safe placeholder in ticket 026).
+func show_options() -> void:
+	change_scene(SCENE_OPTIONS)
+
+
+## Route to the Mods Menu (a safe placeholder in ticket 026).
+func show_mods_menu() -> void:
+	change_scene(SCENE_MODS_MENU)
+
+
+## Close the game cleanly. The main menu calls this from its Quit button.
+func quit_game() -> void:
+	get_tree().quit()
 
 
 ## Load a saved day and enter Game.tscn. SaveManager validates the slot and
@@ -41,7 +77,7 @@ func load_slot(slot_name: String) -> bool:
 		])
 		return false
 	current_save = save
-	change_scene("res://scenes/Game.tscn")
+	change_scene(SCENE_GAME)
 	return true
 
 
