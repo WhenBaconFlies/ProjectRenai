@@ -28,8 +28,8 @@ func _run() -> void:
 	_check(_classified("Lover", 65, 65, 8), "T3: familiarity+affection 65 yields a Lover candidate of weight 8")
 	_check(_classified("Enemy", 0, -25, -100), "T4: affection -25 yields an Enemy candidate of weight -100")
 	_check(_weak_and_malformed_meters(), "T5: Stranger/Acquaintance/malformed meters yield no candidate")
-	_check(_seek_distribution("Friend", 25, 25, "hangout:library"), "T6: a Friend hangout is sought more often than baseline or rivals")
-	_check(_seek_distribution("Lover", 65, 65, "hangout:garden"), "T7: a Lover hangout is sought more often than baseline or rivals")
+	_check(_seek_distribution("Friend", 25, 25, "hangout:hangout_library"), "T6: a Friend hangout is sought more often than baseline or rivals")
+	_check(_seek_distribution("Lover", 65, 65, "hangout:hangout_garden"), "T7: a Lover hangout is sought more often than baseline or rivals")
 	_check(_avoid_hangout(), "T8: an Enemy hangout is never chosen while three rivals exist")
 	_check(_degenerate_all_enemy(), "T9: an all-enemy single-marker map still returns a hangout goal")
 	_check(_seek_player(), "T10: a Lover meter toward the player seeks player.position with no hangouts")
@@ -201,16 +201,16 @@ func _avoid_hangout() -> bool:
 	var template: CharacterTemplate = CharacterTemplate.new()
 	var map := _map()
 	var enemy := _instance("npc:enemy")
-	enemy.current_goal = "hangout:library"
+	enemy.current_goal = "hangout:hangout_library"
 	_meter(instance, enemy, 0, -25)
 	var counts: Dictionary = _goal_counts(instance, template, map, [enemy])
-	return int(counts.get("hangout:library", 0)) == 0 and int(counts.get("", 0)) == 0
+	return int(counts.get("hangout:hangout_library", 0)) == 0 and int(counts.get("", 0)) == 0
 
 
 func _degenerate_all_enemy() -> bool:
 	var instance := _instance("npc:self")
 	var enemy := _instance("npc:enemy")
-	enemy.current_goal = "hangout_only"
+	enemy.current_goal = "hangout:hangout_only"
 	_meter(instance, enemy, 0, -25)
 	var result: Dictionary = _select(instance, CharacterTemplate.new(), _single_map(), 3, 1, [enemy])
 	var destination: Variant = result.get("destination", null)
@@ -262,7 +262,7 @@ func _v1_mood_path_preserved() -> bool:
 func _deterministic() -> bool:
 	var instance := _instance("npc:self")
 	var friend := _instance("npc:friend")
-	friend.current_goal = "hangout:library"
+	friend.current_goal = "hangout:hangout_library"
 	_meter(instance, friend, 25, 25)
 	var roster: Array = [friend]
 	var map := _map()
@@ -293,7 +293,7 @@ func _stale_marker_fallback() -> bool:
 func _defensive_roster() -> bool:
 	var instance := _instance("npc:self")
 	var friend := _instance("npc:friend")
-	friend.current_goal = "hangout:library"
+	friend.current_goal = "hangout:hangout_library"
 	_meter(instance, friend, 25, 25)
 	var roster: Array = [null, "not an instance", instance, friend, friend]
 	var candidates: Array = NpcAi.relationship_candidates(instance, roster)
@@ -307,12 +307,12 @@ func _defensive_roster() -> bool:
 func _node_wiring() -> bool:
 	var instance := _instance("npc:self")
 	var friend := _instance("npc:friend")
-	friend.current_goal = "hangout_only"
+	friend.current_goal = "hangout:hangout_only"
 	_meter(instance, friend, 65, 65)
 
-	var npc := Npc.new()
-	if not npc.has_method("set_relationship_roster"):
+	if not ClassDB.class_has_method("Npc", "set_relationship_roster"):
 		return false
+	var npc := Npc.new()
 	add_child(npc)
 	npc.setup(instance)
 	npc.call("set_relationship_roster", [friend])
