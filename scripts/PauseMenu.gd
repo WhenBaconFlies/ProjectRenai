@@ -49,6 +49,9 @@ func _ready() -> void:
 
 func open() -> void:
 	_close_embedded()
+	# Each pause session starts clean: a rejected slot name/status from the last
+	# one must not leak back into the field (code-review finding 3).
+	_slot_input.text = ""
 	_status_label.text = ""
 	visible = true
 	_resume_button.grab_focus()
@@ -61,6 +64,17 @@ func close() -> void:
 
 func is_open() -> bool:
 	return visible
+
+
+## `_input` runs before GUI input. A focused LineEdit consumes ui_cancel itself
+## (to defocus), which would otherwise leave the game paused while the hint says
+## "Esc resumes". Owning it here keeps that promise while typing a slot name.
+func _input(event: InputEvent) -> void:
+	if not is_open():
+		return
+	if InputMap.has_action("ui_cancel") and event.is_action_pressed("ui_cancel"):
+		handle_cancel()
+		get_viewport().set_input_as_handled()
 
 
 ## Escape while paused: an embedded screen goes Back to the pause menu; with the

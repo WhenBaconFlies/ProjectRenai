@@ -115,6 +115,10 @@ var _conversation_locked_ids: Array = []
 var _pause_menu: Node = null
 var _paused: bool = false
 var _pause_frozen_npcs: Array = []
+## The conversation's Escape cancel sets this for the remainder of the current
+## input event, so the pause gate cannot reopen on that same Escape. Cleared by
+## the handler and deferred to end of frame in case Game never sees the event.
+var _conversation_cancel_latch: bool = false
 
 ## NPC-initiation gate. A zero-arg Callable returning bool; tests and future cases
 ## (e.g. "both skipping class") can inject another condition. Invalid callables
@@ -408,6 +412,9 @@ func sync_ai_state(preserve_saved_goals: bool = false) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# The conversation owns input (including Esc) until it closes.
 	if _dialogue_open:
+		return
+	if _conversation_cancel_latch:
+		_conversation_cancel_latch = false
 		return
 	var key_event := event as InputEventKey
 	if key_event != null and key_event.echo:
@@ -832,9 +839,16 @@ func _display_name_for(instance: NpcInstance, id: String) -> String:
 	return _name_for_id(id)
 
 
-## Esc ends the conversation with no further pick.
+## Esc ends the conversation with no further pick. The latch protects the rest
+## of this input event from also reaching the pause gate (code-review finding 1).
 func _on_conversation_cancelled() -> void:
+	_conversation_cancel_latch = true
+	call_deferred("_clear_conversation_cancel_latch")
 	_close_conversation()
+
+
+func _clear_conversation_cancel_latch() -> void:
+	_conversation_cancel_latch = false
 
 
 ## Single close path: hide the overlay, end the helper session and release every

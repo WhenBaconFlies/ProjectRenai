@@ -8,7 +8,7 @@
 ## the pause and conversation overlays. Prints ALL_028_CHECKS_PASSED on a full pass.
 extends Node
 
-const EXPECTED_CHECKS: int = 37
+const EXPECTED_CHECKS: int = 40
 const SLOT: String = "pause_ui_alpha"
 
 var _passed: int = 0
@@ -226,6 +226,21 @@ func _run() -> void:
 	await _frames(2)
 	_check(not bool(ui.call("is_open")) and not bool(game.call("is_conversation_open")),
 		"T34: the conversation cancels on its own Escape")
+
+	# One Escape delivered in real tree order: ConversationUI first, then Game.
+	# Both handlers see the same event, which direct-call tests otherwise miss.
+	_send_key(interaction, KEY_E)
+	await _frames(3)
+	var shared_escape := InputEventAction.new()
+	shared_escape.action = "ui_cancel"
+	shared_escape.pressed = true
+	ui.call("_unhandled_input", shared_escape)
+	game.call("_unhandled_input", shared_escape)
+	await _frames(2)
+	_check(not bool(game.call("is_paused")) and not bool(pause.call("is_open"))
+		and not bool(game.call("is_conversation_open")),
+		"T34b: one Esc consumed by the conversation never opens pause")
+
 	_send_action(game, "ui_cancel")
 	await _frames(2)
 	_check(bool(game.call("is_paused")) and bool(pause.call("is_open"))
@@ -235,7 +250,30 @@ func _run() -> void:
 	await _frames(2)
 	_check(not bool(game.call("is_paused")) and not bool(pause.call("is_open")),
 		"T36: final Escape resumes cleanly")
-	_check(_passed == EXPECTED_CHECKS - 1, "T37: every planned check ran")
+
+	# A focused LineEdit eats ui_cancel in its own gui_input, so the overlay must
+	# own Escape in _input before GUI handling (code-review finding 2).
+	_send_action(game, "ui_cancel")
+	await _frames(2)
+	var slot_field: LineEdit = pause.get_node_or_null("Box/MenuBox/SaveRow/SlotNameInput") as LineEdit
+	slot_field.text = "typed_but_rejected"
+	slot_field.grab_focus()
+	var field_escape := InputEventAction.new()
+	field_escape.action = "ui_cancel"
+	field_escape.pressed = true
+	pause.call("_input", field_escape)
+	await _frames(2)
+	_check(not bool(game.call("is_paused")) and not bool(pause.call("is_open")),
+		"T36b: Esc resumes even while the slot-name field owns focus")
+
+	_send_action(game, "ui_cancel")
+	await _frames(2)
+	var status_after: Label = pause.get_node_or_null("Box/MenuBox/StatusLabel") as Label
+	_check(slot_field.text.is_empty() and status_after.text.is_empty(),
+		"T36c: a new pause session clears rejected text and status")
+	_send_action(game, "ui_cancel")
+	await _frames(2)
+	_check(_passed == EXPECTED_CHECKS - 1, "T40: every planned check ran")
 
 	_finish()
 

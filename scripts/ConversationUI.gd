@@ -200,6 +200,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		cancelled.emit()
+		# Own the event: Game.gd's _unhandled_input runs after this child in real
+		# propagation, and the cancel above already closes the conversation, so
+		# letting it continue would open the pause menu on the very same Escape.
+		get_viewport().set_input_as_handled()
 		return
 	var key := event as InputEventKey
 	if key == null:
@@ -211,3 +215,4 @@ func _unhandled_input(event: InputEvent) -> void:
 		digit = int(key.keycode) - int(KEY_1)
 	if digit >= 0:
 		_on_choice_pressed(digit)
+		get_viewport().set_input_as_handled()
