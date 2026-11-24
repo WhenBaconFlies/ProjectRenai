@@ -1,0 +1,146 @@
+[gd_resource type="Resource" script_class="Map" load_steps=6 format=3]
+
+[ext_resource type="Resource" path="res://resources/items/item_wall.tres" id="1_wg33i"]
+[ext_resource type="Resource" path="res://resources/items/item_desk.tres" id="2_yw3xa"]
+[ext_resource type="Resource" path="res://resources/items/item_bench.tres" id="3_w07gu"]
+[ext_resource type="Script" path="res://scripts/Map.gd" id="4_dabj8"]
+
+[sub_resource type="NavigationPolygon" id="NavigationPolygon_stmyk"]
+vertices = PackedVector2Array(144, 16, 128, 80, 112, 80, 96, 64, 96, 48, 144, 112, 128, 96, 16, 112, 112, 96, 16, 16, 48, 32, 48, 48, 80, 48, 80, 64, 32, 48, 32, 32)
+polygons = Array[PackedInt32Array]([PackedInt32Array(0, 1, 2, 3, 4), PackedInt32Array(0, 5, 6, 1), PackedInt32Array(6, 5, 7, 8), PackedInt32Array(9, 0, 4, 10), PackedInt32Array(11, 10, 12, 13), PackedInt32Array(3, 2, 8, 7, 13), PackedInt32Array(11, 13, 7, 14), PackedInt32Array(14, 7, 9, 15), PackedInt32Array(10, 15, 9), PackedInt32Array(10, 4, 12)])
+outlines = Array[PackedVector2Array]([PackedVector2Array(16, 16, 144, 16, 144, 112, 16, 112), PackedVector2Array(32, 32, 48, 32, 48, 48, 32, 48), PackedVector2Array(112, 80, 128, 80, 128, 96, 112, 96), PackedVector2Array(80, 48, 96, 48, 96, 64, 80, 64)])
+source_geometry_group_name = &"navigation_polygon_source_group"
+
+[resource]
+script = ExtResource("4_dabj8")
+id = "map:school"
+display_name = "School"
+width = 10
+height = 8
+tile_size = 16
+tile_ids = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+placed_objects = [{
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(16, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(16, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(32, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(32, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(48, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(48, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(64, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(64, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(80, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(80, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(96, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(96, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(112, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(112, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(128, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(128, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 0)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 112)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 16)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 16)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 32)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 32)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 48)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 48)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 64)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 64)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 80)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 80)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(0, 96)
+}, {
+"item": ExtResource("1_wg33i"),
+"position": Vector2(144, 96)
+}, {
+"item": ExtResource("2_yw3xa"),
+"position": Vector2(32, 32)
+}, {
+"item": ExtResource("3_w07gu"),
+"position": Vector2(80, 48)
+}, {
+"item": ExtResource("2_yw3xa"),
+"position": Vector2(112, 80)
+}]
+spawn_point = Vector2(56, 24)
+markers = {
+"classroom_a": Vector2(56, 40),
+"classroom_b": Vector2(100, 40),
+"classroom_c": Vector2(56, 88),
+"classroom_d": Vector2(100, 88),
+"hangout_cafeteria": Vector2(72, 96),
+"hangout_courtyard": Vector2(112, 56),
+"hangout_garden": Vector2(40, 96),
+"hangout_library": Vector2(60, 72)
+}
+hangout_interests = {
+"hangout_cafeteria": PackedStringArray("social", "food"),
+"hangout_courtyard": PackedStringArray("sports", "active", "social"),
+"hangout_garden": PackedStringArray("quiet", "nature", "calm"),
+"hangout_library": PackedStringArray("academic", "study", "quiet")
+}
+navigation_mesh = SubResource("NavigationPolygon_stmyk")
+chunk_size = 32

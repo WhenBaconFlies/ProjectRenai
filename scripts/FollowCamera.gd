@@ -11,14 +11,15 @@ extends Camera2D
 ## position smoothing is deliberately OFF). The player also moves in physics
 ## ticks, so both update in lockstep: the player stays fixed on screen between
 ## ticks instead of stepping and then drifting back as the camera interpolates
-## every render frame (measured as a ~14 px sawtooth at 8x zoom).
+## every render frame (historically measured as a ~14 px sawtooth at 8x zoom).
 ##
 ## Do not write `global_position` from a script every frame while Camera2D's
 ## built-in smoothing is enabled — that fights its internal state and was
 ## observed to invert the follow direction.
 ##
-## The map is tiny (160x128 px on the default resource), so the camera is
-## zoomed in by default to make follow visible and to make the minimap useful.
+## The default debug map is now 512x384 px (the original 160x128 map is kept as
+## map_school_small.tres). Zoom 4 (down from 8 by user choice) shows more of the
+## larger map while keeping follow visible and the minimap useful.
 ## Camera limits are the rendered map's raw pixel bounds. Godot already
 ## accounts for viewport size and zoom when clamping, so insetting the limits
 ## by half the view double-compensates and breaks follow (verified: an inset
@@ -27,9 +28,8 @@ extends Camera2D
 ## NodePath (relative to this camera) of the MapRenderer supplying map bounds.
 @export var map_renderer_path: NodePath = ^"../../MapRenderer"
 
-## Positive values zoom in. 8 keeps the default 160x128 map larger than the
-## viewport so the camera actually travels as the player moves.
-@export var zoom_level: float = 8.0
+## Positive values zoom in. 4 balances following with seeing multiple landmarks.
+@export var zoom_level: float = 4.0
 
 ## Exponential smoothing rate (higher = tighter follow, less lag).
 @export var smoothing_speed: float = 10.0

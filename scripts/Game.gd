@@ -18,9 +18,9 @@ extends Node2D
 const FALLBACK_PLAYER_ID: String = "player"
 
 ## Seconds before a class period starts that NPCs begin walking to their
-## scheduled marker. On the small v1 map a walk takes ~1–2 s, so this lead gives
-## them time to be seated well before the end-of-class attendance check.
-@export var class_travel_lead_sec: float = 4.0
+## scheduled marker. On the large debug map classroom↔hangout walks can take up
+## to ~9 s, so this gives them time to arrive near the start of class.
+@export var class_travel_lead_sec: float = 8.0
 
 
 var _npcs: Array = []

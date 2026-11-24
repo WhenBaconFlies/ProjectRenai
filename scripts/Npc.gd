@@ -45,8 +45,9 @@ const PALETTE: Array = [
 
 ## Hard upper bound for a forced destination (class travel). Progress-based
 ## stall detection can miss an oscillating path, so this guarantees the NPC is
-## snapped onto its marker well before the end-of-class attendance check.
-@export var travel_timeout_sec: float = 8.0
+## snapped onto its marker well before the end-of-class attendance check. 14 s
+## covers the longest classroom↔hangout walk on the large debug map (~9 s).
+@export var travel_timeout_sec: float = 14.0
 
 ## Short pause at a destination before choosing the next goal.
 @export var arrival_pause_sec: float = 0.5
