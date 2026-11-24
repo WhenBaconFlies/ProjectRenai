@@ -25,6 +25,9 @@
 ## driven by the pure Conversation helper: this script owns one session at a
 ## time, maps numbered UI choices to conversation steps, locks input for the
 ## whole exchange, and gates NPC initiation behind an injectable Callable.
+## Ticket 028 adds the in-game pause overlay: Escape opens it only when no
+## conversation owns input, and pausing freezes the whole live scene (day clock,
+## NPCs and player) while Save As / Load / Options / Mods / Resume stay in place.
 extends Node2D
 
 ## Emitted when the player picks a topic. Intentionally carries ids rather than
@@ -105,6 +108,14 @@ var _conversation_actions: Array = []
 ## Ids whose busy flags belong to the open conversation and survive a phase change.
 var _conversation_locked_ids: Array = []
 
+## Ticket 028: the pause overlay and the freeze it owns. The NPCs are frozen with
+## set_conversation_busy(true), which preserves goals/nav state for a clean resume.
+## Typed as Node (not PauseMenu) so a headless run does not depend on the new
+## class_name being present in Godot's global-class cache.
+var _pause_menu: Node = null
+var _paused: bool = false
+var _pause_frozen_npcs: Array = []
+
 ## NPC-initiation gate. A zero-arg Callable returning bool; tests and future cases
 ## (e.g. "both skipping class") can inject another condition. Invalid callables
 ## fall back to the free-time default in _ensure_npc_gate().
@@ -158,6 +169,7 @@ func _ready() -> void:
 	_setup_player_instance()
 	_setup_dialogue()
 	_setup_feedback()
+	_setup_pause()
 	_setup_chunk_manager()
 	_ensure_npc_gate()
 	# Ticket 024: Conversation.choose_topic()/choose_reply() are the only resolvers.
@@ -391,11 +403,23 @@ func sync_ai_state(preserve_saved_goals: bool = false) -> void:
 			npc.set_ai_enabled(false)
 
 
-## Debug hotkeys (menus are deferred in v1). F5 writes the reserved manual slot;
-## F9 loads the most recently written compatible slot.
+## Escape toggles the pause overlay (ticket 028); F5/F9 stay v1 debug hotkeys.
+## A conversation owns every input including Esc until it closes.
 func _unhandled_input(event: InputEvent) -> void:
 	# The conversation owns input (including Esc) until it closes.
 	if _dialogue_open:
+		return
+	var key_event := event as InputEventKey
+	if key_event != null and key_event.echo:
+		return
+	if InputMap.has_action("ui_cancel") and event.is_action_pressed("ui_cancel"):
+		if _paused:
+			if _pause_menu != null:
+				_pause_menu.handle_cancel()
+			return
+		open_pause()
+		return
+	if _paused:
 		return
 	if InputMap.has_action("manual_save") and event.is_action_pressed("manual_save"):
 		if SaveManager.save_slot(SaveManager.MANUAL_SLOT, {}, true):
@@ -431,6 +455,90 @@ func _setup_dialogue() -> void:
 ## it is open, so the pause menu may only open when this returns false.
 func is_conversation_open() -> bool:
 	return _dialogue_open
+
+
+## --- Ticket 028: pause overlay -----------------------------------------------
+
+func _setup_pause() -> void:
+	_pause_menu = get_node_or_null("PauseLayer/PauseMenu")
+	if _pause_menu == null:
+		push_warning("Game: no PauseMenu under PauseLayer; pause disabled")
+		return
+	# Dynamic signal name: the PauseMenu script is a new class that headless runs
+	# may not have in the global-class cache yet.
+	var route_signal: Callable = Callable(self, "_on_pause_route_requested")
+	if not _pause_menu.is_connected("route_requested", route_signal):
+		_pause_menu.connect("route_requested", route_signal)
+
+
+func is_paused() -> bool:
+	return _paused
+
+
+## Open the overlay and freeze everything that advances the day. The conversation
+## gate is checked again here so no stale input can stack both overlays.
+func open_pause() -> bool:
+	if _paused or _dialogue_open or _pause_menu == null:
+		return false
+	_paused = true
+	TimeManager.set_paused(true)
+	if _interaction != null:
+		_interaction.set_enabled(false)
+	var player := get_node_or_null("Player") as Player
+	if player != null:
+		player.set_input_locked(true)
+	_pause_frozen_npcs.clear()
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc == null or npc.is_conversation_busy():
+			continue
+		# set_ai_enabled(false) would clear goals/forced travel; the conversation
+		# busy flag freezes movement while preserving both for a clean resume.
+		_pause_frozen_npcs.append(npc)
+		npc.set_conversation_busy(true)
+	_pause_menu.open()
+	print("[Game] paused: day %d %s" % [
+		TimeManager.get_day_number(), TimeManager.get_state_name()
+	])
+	return true
+
+
+## Single resume path: reverse every freeze taken by open_pause(). Phase elapsed
+## time is untouched, so the day clock continues without drift.
+func close_pause() -> void:
+	if not _paused:
+		return
+	_paused = false
+	TimeManager.set_paused(false)
+	if _pause_menu != null:
+		_pause_menu.close()
+	for npc_variant in _pause_frozen_npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc != null and is_instance_valid(npc):
+			npc.set_conversation_busy(false)
+	_pause_frozen_npcs.clear()
+	var player := get_node_or_null("Player") as Player
+	if player != null:
+		player.set_input_locked(false)
+	if _interaction != null and not _dialogue_open:
+		_interaction.set_enabled(true)
+	print("[Game] resumed")
+
+
+func _on_pause_route_requested(screen: String) -> void:
+	if screen == "load":
+		close_pause()
+		GameManager.show_load_game()
+	else:
+		close_pause()
+
+
+## A scene swap while paused (e.g. the Load route) must not leak a paused clock
+## into the next scene.
+func _exit_tree() -> void:
+	if _paused:
+		TimeManager.set_paused(false)
+		_paused = false
 
 
 ## Install the default free-time gate unless a caller injected one.
@@ -1143,6 +1251,10 @@ func _is_free_time_state(state: int) -> bool:
 ## Advance NPC-initiation timers every frame, then issue class travel once in the
 ## final `class_travel_lead_sec` of free time.
 func _process(delta: float) -> void:
+	# A paused scene does not tick holds, approaches, AI gating or class travel;
+	# the day clock is halted separately inside TimeManager.advance().
+	if _paused:
+		return
 	_update_initiations(delta)
 	_update_approaches(delta)
 	if not TimeManager.is_running():
