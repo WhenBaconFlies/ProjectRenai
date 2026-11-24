@@ -111,6 +111,18 @@ Resolved the schema defaults deferred below; these are the contracts ticket 021 
 - **Feedback panel placement (user-approved, editor pass):** the detailed feedback panel moved from bottom-centre to the **right-middle** of the screen (`InteractionFeedbackUI._build()` anchors) so it no longer covers the bottom conversation overlay. The panel still shows full before/after numbers for now; the user's final intent is a compact side indicator showing only the *trend* (e.g. `Fam +2 / Aff −1`), not exact values, so the player does not get a full grasp. That compact form is a later change, not v2 ticket 024.
 - **NPC approach before talk (user-approved, editor pass):** an NPC-initiated talk with the player does not open the overlay from across the map. If the chosen NPC is farther than `Game.npc_talk_radius` (28 px, matching the interaction radius), it walks to a point beside the player first; the conversation opens on arrival. Busy flags are claimed during the approach so no other interaction double-books the pair, and a timeout (`Game.npc_approach_timeout_sec`, default 6 s) plus a player-moved-away retry cancels the approach cleanly. NPC↔NPC interactions are unchanged.
 
+## Ticket 025 — SettingsManager decisions
+
+- **Scope:** foundation only — `SettingsManager` autoload + `ConfigFile` at `user://settings.cfg`, typed getters/setters, startup + immediate application, corrupt-config fallback, and a headless round-trip harness. The Options screen (030) and ModLoader's settings-based enable/disable (029) are separate tickets; 025 only stores the flags they consume.
+- **Config layout (builder choice):** sections `audio`, `display`, `chunk`, `language`, `mods`. Keys: `master_volume`, `resolution_width`, `resolution_height`, `fullscreen`, the nine `ChunkConfig` fields (radii, hysteresis, promotion duration, three tick rates, fallback pixel size, hide-far flag), `language`, and one boolean per mod id under `mods`.
+- **Defaults (builder choice):** volume `0.8`; resolution `1280x720` windowed; language `English`; chunk values mirror `ChunkConfig`'s defaults; a mod id with no stored flag is treated as enabled. Resolution presets are `1280x720`, `1366x768`, `1920x1080` plus a fullscreen toggle, exposed as data for ticket 030.
+- **Volume application (builder choice):** `AudioManager` is a v1 stub, so 025 adds a minimal typed master-volume API (`set_master_volume()` / `get_master_volume()`, 0..1 linear converted to dB via `AudioServer`) for `SettingsManager` to drive on load and on write. No other audio behavior is implemented.
+- **Display application (builder choice):** `SettingsManager` writes width/height/fullscreen to `DisplayServer` when not headless; in headless runs the write is skipped (storage still round-trips) so harnesses never hit window APIs. Resolution/fullscreen changes are marked restart-required.
+- **Chunk application:** `SettingsManager` builds a `ChunkConfig` from the stored fields and applies it with `ChunkManager.set_config()` on startup and on any chunk write, so tick-rate/radius changes take effect immediately without a restart notice.
+- **Restart notice seam (builder choice):** 025 emits `restart_required(key)` and exposes `is_restart_required(key)`; ticket 030's Options screen presents the notice. No UI is added in 025.
+- **Testability seam:** `set_config_path(path)` redirects the ConfigFile so the headless harness uses `user://settings_manager_test.cfg` and never touches the developer's real settings. `reload()` re-reads from disk and re-applies.
+- **Robustness:** a missing, unparseable, or wrong-typed ConfigFile value falls back to the typed default with a warning log; `load()` errors never crash or overwrite the file until an explicit save.
+
 ## to-spec decisions (v2)
 - **Testing seam:** one persistent integration harness at the highest seam (menus/New Game → conversation → menus/settings/mods → save/reopen → relationship goal), reusing v1's marker-based pass/fail pattern; v1 harnesses re-run as regressions.
 - **Issue tracker:** v2 spec published as a GitHub issue with `ready-for-agent` label.
@@ -127,7 +139,7 @@ Resolved the schema defaults deferred below; these are the contracts ticket 021 
 
 - ~~Exact schema fields/defaults for greetings and responses (esp. greeting weight and response roll-field defaults).~~ Resolved in "Ticket 021 — schema + registry decisions" above.
 - Exact `Conversation` method signatures and phase enum names; whether mid-conversation state is saved (assumption: saves happen between turns).
-- Which windowed resolution presets and ConfigFile keys.
+- ~~Which windowed resolution presets and ConfigFile keys.~~ Resolved in "Ticket 025 — SettingsManager decisions" above.
 - ~~How "period/time of day" is derived (existing `TimeManager` period vs. clock hour).~~ Schema vocabulary resolved to `TimeManager` state names in "Ticket 021 — schema + registry decisions"; deriving the live period remains with the later conversation tickets.
 - Exact shape of the free-time gating callable for NPC initiation.
 - Menu visual styling, placeholder portrait visuals, trait names/costs, topic distribution, test counts.
