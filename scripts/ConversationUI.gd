@@ -182,6 +182,10 @@ func _clear_buttons() -> void:
 	if _choices_box != null:
 		for child in _choices_box.get_children():
 			if is_instance_valid(child):
+				# Detach first: queue_free() alone leaves the old button in the tree
+				# until end of frame, where a second input could map its index onto
+				# the newly installed action list.
+				_choices_box.remove_child(child)
 				child.queue_free()
 
 

@@ -9,7 +9,7 @@
 extends Node
 
 
-const EXPECTED_CHECKS: int = 38
+const EXPECTED_CHECKS: int = 39
 
 var _passed: int = 0
 var _failed: int = 0
@@ -40,6 +40,8 @@ func _run() -> void:
 	await _frames(3)
 	_game.set("npc_initiation_enabled", false)
 	_game.set("show_relationship_feedback", true)
+	# Keep NPCs out of class travel so initiation is not blocked by a forced walk.
+	_game.set("class_travel_lead_sec", 0.0)
 	if not _game.is_connected("dialogue_resolved", Callable(self, "_on_dialogue_resolved")):
 		_game.connect("dialogue_resolved", Callable(self, "_on_dialogue_resolved"))
 	if not _game.is_connected("npc_interaction_started", Callable(self, "_on_npc_interaction_started")):
@@ -119,29 +121,34 @@ func _check_player_flow() -> void:
 		"T11: NPC greeting is shown with one Continue choice"
 	)
 	var speaker_label: Label = ui.get("_speaker_label") as Label
+	var conversation_npc_id: String = str(_game.get("_conversation_npc_id"))
+	var roster: Dictionary = _game.get("_instances_by_id") as Dictionary
+	var speaking_instance: NpcInstance = roster.get(conversation_npc_id) as NpcInstance
 	_check(
-		speaker_label != null and speaker_label.text == target.instance.display_name,
+		speaker_label != null and speaking_instance != null
+		and speaker_label.text == speaking_instance.display_name,
 		"T12: the speaker name is shown"
 	)
 
-	_send_key_to(ui, KEY_1)
+	# Use the Button.pressed path once, since headless Godot does not route
+	# parse_input_event() to _unhandled_input (see the v1 harness note).
+	_press_first_choice(ui)
 	await _frames(2)
 	var topics: Array = ui.call("get_choices") as Array
-	_check(topics.size() >= 3 and topics.size() <= 5, "T13: greeting opens a 3-5 topic pool")
+	_check(topics.size() >= 3 and topics.size() <= 5, "T13: greeting's first choice button opens a 3-5 topic pool")
 
 	var resolved_before: int = _resolved.size()
 	_send_key_to(ui, KEY_1)
 	await _frames(3)
 	_check(_resolved.size() > resolved_before, "T14: topic pick emits dialogue_resolved")
 	var result: Dictionary = _resolved[_resolved.size() - 1] if not _resolved.is_empty() else {}
-	var before: Dictionary = result.get("before", {})
-	var after: Dictionary = result.get("after", {})
-	var changed: bool = not before.is_empty() and not after.is_empty()
-	for party in ["initiator", "target"]:
-		for field in ["familiarity", "affection", "mood"]:
-			if int(_party_field(after, party, field)) == int(_party_field(before, party, field)):
-				changed = false
-	_check(changed, "T15: both parties' meters and mood change after the turn")
+	var deltas: Dictionary = result.get("deltas", {})
+	var initiator_delta: Dictionary = deltas.get("initiator", {})
+	var target_delta: Dictionary = deltas.get("target", {})
+	_check(
+		_has_nonzero_delta(initiator_delta) and _has_nonzero_delta(target_delta),
+		"T15: both parties receive at least one non-zero delta after the turn"
+	)
 	var feedback: Node = _game.get_node_or_null("FeedbackLayer/InteractionFeedbackUI")
 	_check(feedback != null and bool(feedback.call("is_open")), "T16: feedback panel shows the turn")
 	var reaction: Array = ui.call("get_choices") as Array
@@ -188,6 +195,34 @@ func _check_gate_callable() -> void:
 	await _frames(15)
 	_check(_initiations.is_empty(), "T23: a false gate blocks initiation")
 
+	# Arrange a single eligible initiator and the player as its only target so the
+	# production _process/gate path reaches the overlay, not a direct private call.
+	var npcs_root: Node = _game.get_node_or_null("Npcs")
+	var player: Node2D = _game.get_node_or_null("Player") as Node2D
+	var candidate: Npc = null
+	if npcs_root != null:
+		for child in npcs_root.get_children():
+			var possible: Npc = child as Npc
+			if (
+				possible != null and possible.instance != null
+				and NpcInitiation.can_initiate(
+					possible.instance, possible.instance.resolve_template(), false, false
+				)
+			):
+				candidate = possible
+				break
+	if candidate != null:
+		candidate.clear_forced_destination()
+		for child in npcs_root.get_children():
+			var npc: Npc = child as Npc
+			if npc != null:
+				npc.set_conversation_busy(npc != candidate)
+		var busy: Dictionary = _game.get("_initiation_busy")
+		busy.clear()
+		var cooldowns: Dictionary = _game.get("_initiation_cooldowns")
+		cooldowns.clear()
+		if player != null:
+			player.global_position = candidate.global_position + Vector2(8.0, 0.0)
 	_game.call("set_npc_initiation_gate", Callable(self, "_gate_true"))
 	var start_ms: int = Time.get_ticks_msec()
 	var frames: int = 0
@@ -195,7 +230,20 @@ func _check_gate_callable() -> void:
 		await get_tree().process_frame
 		frames += 1
 	_check(not _initiations.is_empty(), "T24: an injected true gate fires outside free time")
-	if ui != null and ui.is_open():
+	var gate_ui_open: bool = ui != null and ui.is_open()
+	var gate_replies_ok: bool = false
+	if gate_ui_open:
+		var gate_opening: Array = ui.call("get_choices") as Array
+		if gate_opening.size() == 1:
+			_send_key_to(ui, KEY_1)
+			await _frames(2)
+		var gate_replies: Array = ui.call("get_choices") as Array
+		gate_replies_ok = gate_replies.size() >= 2 and gate_replies.size() <= 3
+	_check(
+		gate_ui_open and gate_replies_ok,
+		"T24b: the production gate path reaches the 2-3 reply UI"
+	)
+	if gate_ui_open:
 		ui.call("cancel_conversation")
 		await _frames(2)
 	_game.call("set_npc_initiation_gate", Callable())
@@ -308,7 +356,7 @@ func _check_npc_initiated_flow() -> void:
 	var forced_replies: Array = ui.call("get_choices") as Array
 	_check(
 		forced_replies.size() >= 2 and forced_replies.size() <= 3,
-		"T38: an opening topic without authored replies still offers 2-3 options"
+		"T38: unsupported opening topics are replaced by reply-supported ones"
 	)
 	if ui.is_open():
 		ui.call("cancel_conversation")
@@ -356,10 +404,21 @@ func _meters_changed(before: Dictionary, after: Dictionary) -> bool:
 	return false
 
 
-func _party_field(snapshot: Dictionary, party: String, field: String) -> int:
-	var raw: Variant = snapshot.get(party, {})
-	var values: Dictionary = raw if raw is Dictionary else {}
-	return int(values.get(field, 0))
+func _has_nonzero_delta(delta: Dictionary) -> bool:
+	for field in ["familiarity", "affection", "mood"]:
+		if int(delta.get(field, 0)) != 0:
+			return true
+	return false
+
+
+## Exercise the mouse/button path without relying on headless Input propagation.
+func _press_first_choice(ui: ConversationUI) -> void:
+	var box: Node = ui.get("_choices_box") as Node
+	if box == null or box.get_child_count() == 0:
+		return
+	var button: Button = box.get_child(0) as Button
+	if button != null:
+		button.pressed.emit()
 
 
 func _send_key_to(node: Node, keycode: int) -> void:

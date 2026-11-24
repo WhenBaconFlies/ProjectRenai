@@ -3,8 +3,8 @@
 - **Branch:** `ticket/024-conversation-overlay-and-game-wiring` (commit `3275952`, reviewed as `git diff HEAD~1..HEAD`)
 - **Base:** `master` (merge-base: `240e37fbda32755705901dfcb8ea9fceafc944ab`)
 - **Changed files:** 17
-- **Findings:** 5 (Critical: 0, High: 0, Medium: 2, Low: 3)
-- **Verification at review time:** 024 harness 36/36; regressions 018 42/42, 019 60/60, 020 58/58, 021 23/23, 022 23/23, 023 35/35.
+- **Findings:** 9 (Critical: 0, High: 0, Medium: 4, Low: 5) — merged from two independent review passes; the two High findings found by the second pass were already fixed in follow-up commit `9d0f660` and are not re-listed.
+- **Verification at review time:** 024 harness 36/36 before fixes, 39/39 after; regressions 018 42/42, 019 60/60, 020 58/58, 021 23/23, 022 23/23, 023 35/35.
 
 ## Findings
 
@@ -43,6 +43,37 @@
 - **Recommendation:** Reword to state that hold timers clear while open conversations keep their locks until `_close_conversation()`.
 - **Status:** fixed — comment updated.
 
+### 6. [Medium][Bug] Stale choice buttons remained in the tree for one frame
+- **Location:** `scripts/ConversationUI.gd:180-186` (`_clear_buttons`)
+- **Evidence:** Old buttons were only `queue_free()`d, so they stayed in `_choices_box` until end of frame while `show_line()` immediately installed new buttons. `_on_choice_pressed()` (`:188-192`) checks only `_is_open` (still true) and index bounds, so a second event in the same frame could apply a stale index to the new action list (e.g. greeting Continue immediately rolling a topic).
+- **Problem:** A fast double input could skip the topic pool.
+- **Recommendation:** `remove_child()` before `queue_free()` in `_clear_buttons()`.
+- **Status:** fixed — stale buttons are detached synchronously.
+
+### 7. [Medium][Testing] Mouse/`Button.pressed` path was never exercised
+- **Location:** `tests/ConversationUITest.gd:321-327` (`_send_key_to`)
+- **Evidence:** All interactions called `_unhandled_input` directly; no `Button.pressed` emission or mouse event existed in the harness. Headless Godot cannot route `parse_input_event()` to `_unhandled_input` in this project (v1 harness note), so `Button.pressed.emit()` is the practical seam.
+- **Problem:** A regression in the mouse-click path promised by `ConversationUI.gd:12` would go undetected.
+- **Recommendation:** Drive at least one transition through `Button.pressed`.
+- **Status:** fixed — T13 now advances via `_press_first_choice()` emitting `pressed` on the first rendered button.
+
+### 8. [Medium][Testing] NPC-initiated flow tests bypassed the production gate
+- **Location:** `tests/ConversationUITest.gd:241` (direct `_try_one_initiation` call)
+- **Evidence:** T23/T24 only asserted the `_initiations` signal count; T24 never asserted that the overlay opened with reply options when the injected gate fired.
+- **Problem:** The real `_process` → gate → candidate-selection path was never proven to reach the reply UI.
+- **Recommendation:** In the gate test, arrange one eligible outgoing initiator and the player as its target, then assert the reply UI after the gate fires.
+- **Status:** fixed — T24b now asserts the gate-driven path reaches a 2–3 reply UI; the direct call remains only for deterministic flow checks.
+
+### 9. [Low][Testing] T15 over-specified success
+- **Location:** `tests/ConversationUITest.gd:131-144` (reviewed commit)
+- **Evidence:** The check required all six familiarity/affection/mood fields to differ; an authored zero delta would fail it even though the interaction was valid.
+- **Problem:** Brittle assertion coupled to current content values.
+- **Recommendation:** Assert at least one non-zero delta per party from the resolver payload.
+- **Status:** fixed — T15 now uses `result["deltas"]` and `_has_nonzero_delta()`.
+
+### Caveat on the earlier T38 fix
+The T38 test passed an unsupported topic array to `_try_one_initiation`, but the NPC→player branch intentionally ignores the caller's topic list and reads the supported pool from the registry. The check was relabelled to what it actually proves: "unsupported opening topics are replaced by reply-supported ones". The helper's genuine no-authored-reply fallback remains covered by ticket 023's T32.
+
 ## Evidence validation
 
-All five findings were re-checked against the working tree after fixes: the harness now reports 38/38 (`ALL_024_CHECKS_PASSED`), including new checks T37 (feedback labels) and T38 (unsupported opening topic). No finding was retained without a file:line reference and concrete code/test evidence.
+All nine findings were re-checked against the working tree after fixes: the harness now reports 39/39 (`ALL_024_CHECKS_PASSED`), including new checks T37 (feedback labels), T38 (supported opening topics), and T24b (production gate path). No finding was retained without a file:line reference and concrete code/test evidence.
