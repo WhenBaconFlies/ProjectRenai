@@ -13,11 +13,12 @@ extends Node
 
 const TEST_CONFIG_PATH: String = "user://options_test.cfg"
 const OPTIONS_SCENE: String = "res://scenes/Options.tscn"
-const EXPECTED_CHECKS: int = 19
+const EXPECTED_CHECKS: int = 21
 
 var _passed: int = 0
 var _failed: int = 0
 var _restarts: Array[String] = []
+var _volume_writes: int = 0
 var _back_calls: int = 0
 var _options: Control = null
 
@@ -28,6 +29,11 @@ func _ready() -> void:
 
 func _on_restart_required(key: String) -> void:
 	_restarts.append(key)
+
+
+func _on_settings_changed(key: String) -> void:
+	if key == "audio/master_volume":
+		_volume_writes += 1
 
 
 func _record_back() -> void:
@@ -43,6 +49,7 @@ func _run() -> void:
 	SettingsManager.set_resolution_preset(1)
 	SettingsManager.set_fullscreen(false)
 	SettingsManager.restart_required.connect(_on_restart_required)
+	SettingsManager.settings_changed.connect(_on_settings_changed)
 	_restarts.clear()
 
 	var packed := load(OPTIONS_SCENE) as PackedScene
@@ -87,11 +94,19 @@ func _run() -> void:
 		and volume_label != null and volume_label.text == "50%",
 		"T4: volume slider/label populate from the stored 0.5 value")
 	if volume_slider != null:
+		# A multi-step drag must not write settings until the drag is committed.
+		volume_slider.value = 20.0
+		volume_slider.value = 30.0
 		volume_slider.value = 37.0
-	_check(is_equal_approx(SettingsManager.get_master_volume(), 0.37)
-		and is_equal_approx(AudioManager.get_master_volume(), 0.37)
+	_check(_volume_writes == 0 and is_equal_approx(SettingsManager.get_master_volume(), 0.5)
 		and volume_label != null and volume_label.text == "37%",
-		"T5: volume change applies immediately to SettingsManager and AudioManager")
+		"T5a: intermediate drag steps update the readout without writing settings")
+	if volume_slider != null:
+		volume_slider.drag_ended.emit(true)
+	_check(_volume_writes == 1
+		and is_equal_approx(SettingsManager.get_master_volume(), 0.37)
+		and is_equal_approx(AudioManager.get_master_volume(), 0.37),
+		"T5b: drag commit writes once and applies to SettingsManager and AudioManager")
 
 	# --- Chunk radii / tick rates: immediate, no restart ----------------------
 	var close_radius := _node("SettingsScroll/SettingsBox/CloseRadiusRow/CloseRadiusSpin") as SpinBox
@@ -120,6 +135,13 @@ func _run() -> void:
 		and is_equal_approx(live_chunk.close_tick_sec, 0.25)
 		and is_equal_approx(live_chunk.far_tick_sec, 9.0),
 		"T7: chunk radius/rate changes apply immediately to SettingsManager and ChunkManager")
+	# Raising close past near must clamp near up to the effective runtime value.
+	close_radius.value = 10.0
+	_check(SettingsManager.get_close_radius_chunks() == 10
+		and SettingsManager.get_near_radius_chunks() == 10
+		and is_equal_approx(near_radius.value, 10.0)
+		and is_equal_approx(near_radius.min_value, 10.0),
+		"T7b: raising close radius clamps near to the effective value")
 	_check(_restarts.is_empty() and not _is_visible("RestartNotice"),
 		"T8: volume/chunk writes need no restart notice")
 
@@ -170,12 +192,13 @@ func _run() -> void:
 	# --- Persistence ----------------------------------------------------------
 	SettingsManager.reload()
 	_check(is_equal_approx(SettingsManager.get_master_volume(), 0.37)
-		and SettingsManager.get_close_radius_chunks() == 4
+		and SettingsManager.get_close_radius_chunks() == 10
+		and SettingsManager.get_near_radius_chunks() == 10
 		and is_equal_approx(SettingsManager.get_close_tick_sec(), 0.25)
 		and SettingsManager.get_resolution() == Vector2i(1920, 1080)
 		and SettingsManager.get_fullscreen()
 		and is_equal_approx(AudioManager.get_master_volume(), 0.37)
-		and ChunkManager.get_config().close_radius_chunks == 4,
+		and ChunkManager.get_config().close_radius_chunks == 10,
 		"T14: all UI changes persist and re-apply after SettingsManager.reload()")
 
 	# --- Back seam (injected action + default route) --------------------------

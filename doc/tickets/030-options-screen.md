@@ -4,7 +4,7 @@
 
 **Blocked by:** 025 (SettingsManager + ConfigFile persistence)
 
-**Status:** ready-for-agent
+**Status:** complete
 
 - [x] Volume control is present and applies immediately
 - [x] Chunk settings expose tier radii and tick rates and apply immediately

@@ -55,8 +55,12 @@ func _populate() -> void:
 	_volume_slider.value = SettingsManager.get_master_volume() * 100.0
 	_update_volume_label()
 
-	_configure_int_spin(_close_radius_spin, 0, 32, SettingsManager.get_close_radius_chunks())
-	_configure_int_spin(_near_radius_spin, 1, 64, SettingsManager.get_near_radius_chunks())
+	# ChunkManager silently clamps near up to close; mirror that here so the UI
+	# never shows a near radius the simulation will not actually use.
+	var close_value: int = SettingsManager.get_close_radius_chunks()
+	var near_value: int = maxi(SettingsManager.get_near_radius_chunks(), close_value)
+	_configure_int_spin(_close_radius_spin, 0, 32, close_value)
+	_configure_int_spin(_near_radius_spin, maxi(1, close_value), 64, near_value)
 	_configure_float_spin(_close_tick_spin, 0.0, 30.0, SettingsManager.get_close_tick_sec())
 	_configure_float_spin(_near_tick_spin, 0.0, 30.0, SettingsManager.get_near_tick_sec())
 	_configure_float_spin(_far_tick_spin, 0.0, 120.0, SettingsManager.get_far_tick_sec())
@@ -106,7 +110,10 @@ func _update_volume_label() -> void:
 ## --- Control wiring ---------------------------------------------------------
 
 func _connect_controls() -> void:
-	_volume_slider.value_changed.connect(_on_volume_changed)
+	# value_changed only updates the readout while dragging; the write (and its
+	# ConfigFile save) happens once on drag commit so a drag is not N disk writes.
+	_volume_slider.value_changed.connect(_on_volume_value_changed)
+	_volume_slider.drag_ended.connect(_on_volume_drag_ended)
 	_close_radius_spin.value_changed.connect(_on_close_radius_changed)
 	_near_radius_spin.value_changed.connect(_on_near_radius_changed)
 	_close_tick_spin.value_changed.connect(_on_close_tick_changed)
@@ -116,15 +123,25 @@ func _connect_controls() -> void:
 	_fullscreen_check.toggled.connect(_on_fullscreen_toggled)
 
 
-func _on_volume_changed(value: float) -> void:
+func _on_volume_value_changed(_value: float) -> void:
+	# Live readout only; no settings write until the drag is released.
+	_update_volume_label()
+
+
+func _on_volume_drag_ended(_changed: bool) -> void:
 	if _populating:
 		return
-	SettingsManager.set_master_volume(value / 100.0)
-	_update_volume_label()
+	SettingsManager.set_master_volume(_volume_slider.value / 100.0)
 
 
 func _on_close_radius_changed(value: float) -> void:
 	_write_chunk_int("close_radius_chunks", value)
+	# Keep the near radius at least as large as close, matching ChunkManager's
+	# runtime clamp, and persist the raised value through the normal signal path.
+	var close_value: int = int(round(value))
+	_near_radius_spin.min_value = float(maxi(1, close_value))
+	if int(round(_near_radius_spin.value)) < close_value:
+		_near_radius_spin.value = float(close_value)
 
 
 func _on_near_radius_changed(value: float) -> void:
