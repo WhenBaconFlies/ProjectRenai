@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://bbfvd1hyf536b"]
+[gd_scene load_steps=12 format=3 uid="uid://bbfvd1hyf536b"]
 
 [ext_resource type="Script" path="res://scripts/MapRenderer.gd" id="1_mr"]
 [ext_resource type="Resource" uid="uid://clwrjy4w6pk51" path="res://resources/maps/map_school.tres" id="2_map"]
@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/InteractionComponent.gd" id="7_interaction"]
 [ext_resource type="Script" path="res://scripts/DialoguePoolUI.gd" id="8_dialogue_ui"]
 [ext_resource type="Script" path="res://scripts/InteractionFeedbackUI.gd" id="9_feedback"]
+[ext_resource type="Script" path="res://scripts/ChunkGridOverlay.gd" id="10_overlay"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 6.0
@@ -19,6 +20,10 @@ script = ExtResource("6_game")
 [node name="MapRenderer" type="Node2D" parent="."]
 script = ExtResource("1_mr")
 map = ExtResource("2_map")
+focus_path = NodePath("../Player")
+
+[node name="ChunkGridOverlay" type="Node2D" parent="MapRenderer"]
+script = ExtResource("10_overlay")
 
 [node name="Player" type="CharacterBody2D" parent="."]
 position = Vector2(56, 24)

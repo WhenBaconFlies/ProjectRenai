@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="Map" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="Map" load_steps=6 format=3 uid="uid://clwrjy4w6pk51"]
 
-[ext_resource type="Resource" path="res://resources/items/item_wall.tres" id="1_wall"]
-[ext_resource type="Resource" path="res://resources/items/item_desk.tres" id="2_desk"]
-[ext_resource type="Resource" path="res://resources/items/item_bench.tres" id="3_bench"]
+[ext_resource type="Resource" uid="uid://iq88fwmypyaw" path="res://resources/items/item_wall.tres" id="1_wall"]
+[ext_resource type="Resource" uid="uid://h2k7sirayp8r" path="res://resources/items/item_desk.tres" id="2_desk"]
+[ext_resource type="Resource" uid="uid://ca63dtdrs78cj" path="res://resources/items/item_bench.tres" id="3_bench"]
 [ext_resource type="Script" path="res://scripts/Map.gd" id="4_map"]
 
 [sub_resource type="NavigationPolygon" id="NavigationPolygon_large"]
@@ -18,7 +18,361 @@ width = 32
 height = 24
 tile_size = 16
 tile_ids = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-placed_objects = [{ "item": ExtResource("1_wall"), "position": Vector2(8, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(24, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(24, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(40, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(40, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(56, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(56, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(72, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(72, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(88, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(88, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(104, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(104, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(120, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(120, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(136, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(136, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(152, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(152, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(168, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(168, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(184, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(184, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(200, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(200, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(216, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(216, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(232, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(232, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(248, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(248, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(264, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(264, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(280, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(280, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(296, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(296, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(312, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(312, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(328, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(328, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(344, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(344, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(360, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(360, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(376, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(376, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(392, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(392, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(408, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(408, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(424, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(424, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(440, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(440, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(456, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(456, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(472, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(472, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(488, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(488, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 8) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 376) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 24) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 24) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 40) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 40) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 56) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 56) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 72) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 72) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 88) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 88) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 104) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 104) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 120) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 120) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 136) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 136) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 152) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 152) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 168) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 168) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 184) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 184) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 200) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 200) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 216) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 216) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 232) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 232) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 248) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 248) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 264) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 264) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 280) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 280) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 296) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 296) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 312) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 312) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 328) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 328) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 344) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 344) }, { "item": ExtResource("1_wall"), "position": Vector2(8, 360) }, { "item": ExtResource("1_wall"), "position": Vector2(504, 360) }, { "item": ExtResource("2_desk"), "position": Vector2(136, 88) }, { "item": ExtResource("2_desk"), "position": Vector2(152, 88) }, { "item": ExtResource("2_desk"), "position": Vector2(168, 88) }, { "item": ExtResource("2_desk"), "position": Vector2(344, 296) }, { "item": ExtResource("2_desk"), "position": Vector2(360, 296) }, { "item": ExtResource("2_desk"), "position": Vector2(376, 296) }, { "item": ExtResource("3_bench"), "position": Vector2(248, 168) }, { "item": ExtResource("3_bench"), "position": Vector2(264, 168) }, { "item": ExtResource("3_bench"), "position": Vector2(120, 248) }, { "item": ExtResource("2_desk"), "position": Vector2(392, 120) }]
+placed_objects = [{
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(24, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(24, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(40, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(40, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(56, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(56, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(72, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(72, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(88, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(88, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(104, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(104, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(120, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(120, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(136, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(136, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(152, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(152, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(168, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(168, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(184, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(184, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(200, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(200, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(216, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(216, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(232, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(232, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(248, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(248, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(264, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(264, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(280, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(280, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(296, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(296, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(312, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(312, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(328, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(328, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(344, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(344, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(360, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(360, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(376, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(376, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(392, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(392, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(408, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(408, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(424, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(424, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(440, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(440, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(456, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(456, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(472, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(472, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(488, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(488, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 8)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 376)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 24)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 24)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 40)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 40)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 56)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 56)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 72)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 72)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 88)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 88)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 104)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 104)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 120)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 120)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 136)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 136)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 152)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 152)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 168)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 168)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 184)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 184)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 200)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 200)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 216)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 216)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 232)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 232)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 248)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 248)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 264)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 264)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 280)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 280)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 296)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 296)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 312)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 312)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 328)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 328)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 344)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 344)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(8, 360)
+}, {
+"item": ExtResource("1_wall"),
+"position": Vector2(504, 360)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(136, 88)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(152, 88)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(168, 88)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(344, 296)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(360, 296)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(376, 296)
+}, {
+"item": ExtResource("3_bench"),
+"position": Vector2(248, 168)
+}, {
+"item": ExtResource("3_bench"),
+"position": Vector2(264, 168)
+}, {
+"item": ExtResource("3_bench"),
+"position": Vector2(120, 248)
+}, {
+"item": ExtResource("2_desk"),
+"position": Vector2(392, 120)
+}]
 spawn_point = Vector2(256, 192)
 markers = {
 "classroom_a": Vector2(80, 80),

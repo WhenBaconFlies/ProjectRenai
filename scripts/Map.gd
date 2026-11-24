@@ -141,6 +141,65 @@ var chunk_grid_size: Vector2i:
 		return Vector2i(chunk_grid_width, chunk_grid_height)
 
 
+## --- Chunk coordinate helpers (ticket 020) ---------------------------------
+
+## Side length of one chunk in world pixels (chunk_size tiles × tile_size).
+## Returns 0 for a non-positive chunk size or tile size so callers can bail out.
+func chunk_pixel_size() -> int:
+	if chunk_size <= 0 or tile_size <= 0:
+		return 0
+	return chunk_size * tile_size
+
+
+## Chunk coordinates containing tile `tile`. Uses floor division so negative
+## coordinates land in the chunk to their left/above; results are NOT clamped —
+## call clamp_chunk() when an in-grid coordinate is required.
+func tile_to_chunk(tile: Vector2i) -> Vector2i:
+	if chunk_size <= 0:
+		return Vector2i.ZERO
+	return Vector2i(
+		floori(float(tile.x) / float(chunk_size)),
+		floori(float(tile.y) / float(chunk_size))
+	)
+
+
+## Chunk coordinates containing a world-space pixel position.
+func world_to_chunk(world: Vector2) -> Vector2i:
+	var size_px: int = chunk_pixel_size()
+	if size_px <= 0:
+		return Vector2i.ZERO
+	return Vector2i(
+		floori(world.x / float(size_px)),
+		floori(world.y / float(size_px))
+	)
+
+
+## Clamp a chunk coordinate into the derived grid. Returns the origin for an
+## empty map (zero width/height or invalid chunk size).
+func clamp_chunk(chunk: Vector2i) -> Vector2i:
+	if chunk_grid_width <= 0 or chunk_grid_height <= 0:
+		return Vector2i.ZERO
+	return Vector2i(
+		clampi(chunk.x, 0, chunk_grid_width - 1),
+		clampi(chunk.y, 0, chunk_grid_height - 1)
+	)
+
+
+## World-space rectangle covered by `chunk`. Not clamped: callers may use it to
+## reason about out-of-grid chunks before clamping with clamp_chunk().
+func chunk_rect(chunk: Vector2i) -> Rect2:
+	var size_px: int = chunk_pixel_size()
+	return Rect2(
+		float(chunk.x * size_px), float(chunk.y * size_px),
+		float(size_px), float(size_px)
+	)
+
+
+## Total number of chunks in the derived grid (0 for an empty map).
+func get_chunk_count() -> int:
+	return chunk_grid_width * chunk_grid_height
+
+
 ## --- Marker read API --------------------------------------------------------
 
 ## True when `name` is an authored marker on this map.
