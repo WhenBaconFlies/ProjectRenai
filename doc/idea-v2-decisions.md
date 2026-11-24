@@ -73,6 +73,14 @@ Resolved the schema defaults deferred below; these are the contracts ticket 021 
 - **Registry layout:** new buckets `TYPE_GREETING` and `TYPE_RESPONSE`; base content in `resources/dialogue/greetings/` and `resources/dialogue/responses/` via `BASE_GREETINGS_DIR` / `BASE_RESPONSES_DIR`; add-only duplicate-ID rules unchanged. One sample `.tres` of each type authored as base content proves editor creation, save, and round-trip.
 - **Verification:** a dedicated headless harness (`tests/DialogueSchemaBootstrap.*`, `tests/DialogueSchemaTest.gd`, `tests/run_dialogue_schema_tests.ps1`) asserts field round-trips, `is_line_only()`, and registry add-only behaviour; the v1 harnesses re-run as regressions.
 
+## Ticket 022 — content + base trait registration decisions
+
+- **Base trait registration (user-approved):** `ModLoader` gains `BASE_TRAITS_DIR` (`res://resources/traits/`) and registers `Trait` resources into the existing `TYPE_TRAIT` bucket during `_register_base_content()`. All 24 traits (6 existing + 18 new) become registry-visible under the same add-only duplicate-ID rule as every other bucket. Character templates keep referencing trait `.tres` files through `ext_resource` exactly as in v1.
+- **Counts (builder choice):** 18 new traits (24 total), 12 greetings (10 new), 16 player topics (14 new), 24 responses (22 new) = 52 dialogue resources, inside the spec's 40–60 range. Id namespaces stay `trait:*`, `greeting:*`, `topic:*`, `response:*`.
+- **Default-response coverage (builder choice):** every one of the 16 topics gets one authored default `DialogueResponse` (`topic_id` set, `outcomes`/`relationship_bands` empty). Alongside the existing generic authored line, 7 band/outcome-specific lines exercise the exact-match layer, so all four fallback layers have real data.
+- **Character templates unchanged:** new traits are authored and registry-visible but are not assigned to the five base templates in this ticket. Trait-factor greetings use tags already present on the default player/NPC pair (`academic`, `sports`, `active`), which keeps the v1 harnesses stable.
+- **Smoke check (builder choice):** a dedicated headless harness (`tests/TraitsAndDialogueContent.*`, `tests/run_traits_and_dialogue_tests.ps1`) validates vocab, counts, default-response coverage, all four greeting factors, add-only registration, and the default player (`char:alex`) / NPC (`char:jordan`) Stranger/PERIOD1 pair; the v1 harnesses and 021 re-run as regressions.
+
 ## to-spec decisions (v2)
 - **Testing seam:** one persistent integration harness at the highest seam (menus/New Game → conversation → menus/settings/mods → save/reopen → relationship goal), reusing v1's marker-based pass/fail pattern; v1 harnesses re-run as regressions.
 - **Issue tracker:** v2 spec published as a GitHub issue with `ready-for-agent` label.

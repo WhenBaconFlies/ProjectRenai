@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DialogueGreeting" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueGreeting.gd" id="1_greeting"]
+
+[resource]
+script = ExtResource("1_greeting")
+id = "greeting:stranger_class"
+text = "Hi. Do you have a second before class starts?"
+relationship_types = PackedStringArray("Stranger")
+min_mood = 0
+max_mood = 100
+periods = PackedStringArray("PERIOD2", "PERIOD3", "PERIOD4")
+required_traits = PackedStringArray()
+required_interests = PackedStringArray()
+weight = 1.0

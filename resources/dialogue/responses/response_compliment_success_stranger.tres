@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="DialogueResponse" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueResponse.gd" id="1_response"]
+
+[resource]
+script = ExtResource("1_response")
+id = "response:compliment_success_stranger"
+text = "Oh — um, thank you. That's nice of you to say."
+topic_id = "topic:compliment"
+outcomes = PackedStringArray("success")
+relationship_bands = PackedStringArray("Stranger")
+checked_stat = ""
+difficulty = 0
+affection_delta_success = 0
+familiarity_delta_success = 0
+mood_delta_success = 0
+affection_delta_failure = 0
+familiarity_delta_failure = 0
+mood_delta_failure = 0

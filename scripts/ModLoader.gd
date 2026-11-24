@@ -15,7 +15,9 @@
 ## the `character` bucket first (ticket 012), so NPC spawning has a single
 ## resolution path for both base and modded templates. Ticket 021 adds the
 ## `greeting` and `response` buckets for the two new dialogue resource types;
-## they follow the same add-only rules as `dialogue`.
+## they follow the same add-only rules as `dialogue`. Ticket 022 adds authored
+## traits (res://resources/traits/) to the existing `trait` bucket so every
+## piece of content, not just dialogue, loads through one base-registration path.
 extends Node
 
 ## --- Registry bucket names -------------------------------------------------
@@ -36,6 +38,11 @@ const DISABLED_MARKER: String = ".disabled"
 ## registered before mod content so v1's add-only rule lets mods add new ids but
 ## never silently override a base id.
 const BASE_CHARACTERS_DIR: String = "res://resources/characters/"
+
+## Authored traits (ticket 022). Registered before mod content so mods can add
+## new trait ids but never silently override a base trait. Character templates
+## continue to reference these files directly via ext_resource.
+const BASE_TRAITS_DIR: String = "res://resources/traits/"
 
 ## Authored dialogue topics (ticket 014). Registered alongside base characters
 ## so every eligible topic — base or mod — comes from the same registry.
@@ -184,10 +191,10 @@ func _reset_registries() -> void:
 	_last_report.clear()
 
 
-## Register authored base resources (characters, dialogue topics) into their
-## registries. Runs on every load_mods() (after the clear) so re-scans restore
-## base content. A missing directory is a soft warning, never a crash — gameplay
-## can still run from mod content alone.
+## Register authored base resources (characters, traits, dialogue topics,
+## greetings, responses) into their registries. Runs on every load_mods() (after
+## the clear) so re-scans restore base content. A missing directory is a soft
+## warning, never a crash — gameplay can still run from mod content alone.
 func _register_base_content() -> void:
 	for path in _base_resource_paths(BASE_CHARACTERS_DIR):
 		var resource: Resource = ResourceLoader.load(path)
@@ -195,6 +202,13 @@ func _register_base_content() -> void:
 			register_resource(TYPE_CHARACTER, resource, BASE_OWNER)
 		else:
 			_log("WARN: base content '%s' is not a CharacterTemplate; skipping" % path)
+
+	for path in _base_resource_paths(BASE_TRAITS_DIR):
+		var resource: Resource = ResourceLoader.load(path)
+		if resource is Trait:
+			register_resource(TYPE_TRAIT, resource, BASE_OWNER)
+		else:
+			_log("WARN: base content '%s' is not a Trait; skipping" % path)
 
 	for path in _base_resource_paths(BASE_DIALOGUES_DIR):
 		var resource: Resource = ResourceLoader.load(path)

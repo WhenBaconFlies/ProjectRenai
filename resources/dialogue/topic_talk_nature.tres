@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="DialogueTopic" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/DialogueTopic.gd" id="1_topic"]
+
+[resource]
+script = ExtResource("1_topic")
+id = "topic:talk_nature"
+text = "The courtyard looks nice today."
+min_mood = 0
+min_familiarity = 0
+min_affection = 0
+required_interests = PackedStringArray("nature")
+required_traits = PackedStringArray()
+required_stat = ""
+required_stat_min = 0
+checked_stat = "wisdom"
+difficulty = 4
+affection_delta_success = 2
+familiarity_delta_success = 2
+mood_delta_success = 1
+affection_delta_failure = 0
+familiarity_delta_failure = 1
+mood_delta_failure = 0
+recipient_modifiers = []

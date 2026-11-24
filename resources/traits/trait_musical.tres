@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="Trait" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Trait.gd" id="1_trait"]
+
+[resource]
+script = ExtResource("1_trait")
+id = "trait:musical"
+display_name = "Musical"
+category = "skill"
+point_cost = 2
+strength_start_mod = 0
+dexterity_start_mod = 0
+constitution_start_mod = 0
+intelligence_start_mod = 0
+wisdom_start_mod = 0
+charisma_start_mod = 1
+strength_growth_mod = 0.0
+dexterity_growth_mod = 0.0
+constitution_growth_mod = 0.0
+intelligence_growth_mod = 0.0
+wisdom_growth_mod = 0.0
+charisma_growth_mod = 0.1
+tags = PackedStringArray("music", "creative")
