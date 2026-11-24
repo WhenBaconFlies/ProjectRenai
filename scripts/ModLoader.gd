@@ -32,6 +32,11 @@ const DISABLED_MARKER: String = ".disabled"
 ## registered before mod content so v1's add-only rule lets mods add new ids but
 ## never silently override a base id.
 const BASE_CHARACTERS_DIR: String = "res://resources/characters/"
+
+## Authored dialogue topics (ticket 014). Registered alongside base characters
+## so every eligible topic — base or mod — comes from the same registry.
+const BASE_DIALOGUES_DIR: String = "res://resources/dialogue/"
+
 const BASE_OWNER: String = "base"
 
 ## bucket name -> { stable id (String) -> Resource }
@@ -167,28 +172,43 @@ func _reset_registries() -> void:
 	_last_report.clear()
 
 
-## Register authored base character templates into the `character` registry.
-## Runs on every load_mods() (after the clear) so re-scans restore base content.
-## A missing directory is a soft warning, never a crash — gameplay can still run
-## from mod content alone.
+## Register authored base resources (characters, dialogue topics) into their
+## registries. Runs on every load_mods() (after the clear) so re-scans restore
+## base content. A missing directory is a soft warning, never a crash — gameplay
+## can still run from mod content alone.
 func _register_base_content() -> void:
-	var dir: DirAccess = DirAccess.open(BASE_CHARACTERS_DIR)
+	for path in _base_resource_paths(BASE_CHARACTERS_DIR):
+		var resource: Resource = ResourceLoader.load(path)
+		if resource is CharacterTemplate:
+			register_resource(TYPE_CHARACTER, resource, BASE_OWNER)
+		else:
+			_log("WARN: base content '%s' is not a CharacterTemplate; skipping" % path)
+
+	for path in _base_resource_paths(BASE_DIALOGUES_DIR):
+		var resource: Resource = ResourceLoader.load(path)
+		if resource is DialogueTopic:
+			register_resource(TYPE_DIALOGUE, resource, BASE_OWNER)
+		else:
+			_log("WARN: base content '%s' is not a DialogueTopic; skipping" % path)
+
+
+## Resource file paths in one authored base directory, sorted for stable order.
+func _base_resource_paths(dir_path: String) -> Array[String]:
+	var paths: Array[String] = []
+	var dir: DirAccess = DirAccess.open(dir_path)
 	if dir == null:
-		_log("WARN: cannot open base characters directory '%s' (error %d)" % [BASE_CHARACTERS_DIR, DirAccess.get_open_error()])
-		return
+		_log("WARN: cannot open base content directory '%s' (error %d)" % [dir_path, DirAccess.get_open_error()])
+		return paths
 
 	dir.list_dir_begin()
 	var entry: String = dir.get_next()
 	while entry != "":
 		if entry.ends_with(".tres") or entry.ends_with(".res"):
-			var path: String = _join(BASE_CHARACTERS_DIR, entry)
-			var resource: Resource = ResourceLoader.load(path)
-			if resource is CharacterTemplate:
-				register_resource(TYPE_CHARACTER, resource, BASE_OWNER)
-			else:
-				_log("WARN: base content '%s' is not a CharacterTemplate; skipping" % path)
+			paths.append(_join(dir_path, entry))
 		entry = dir.get_next()
 	dir.list_dir_end()
+	paths.sort()
+	return paths
 
 
 ## Scan `root_path` for direct subfolders that are mod candidates.

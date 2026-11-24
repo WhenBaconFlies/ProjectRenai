@@ -90,6 +90,17 @@ var _travel_timeout: float = -1.0
 var _avoid_elapsed: float = 0.0
 var _avoid_point: Vector2 = Vector2.ZERO
 
+## True while this NPC is the target of an open conversation (ticket 014).
+## Movement freezes for the duration, but the active goal and navigation target
+## are deliberately preserved so the NPC resumes where it left off. Ticket 016
+## uses `is_busy()` / `is_conversation_busy()` as its "already talking" gate.
+var _conversation_busy: bool = false
+
+## Class transition hard-snap requested while talking. A frozen NPC must not be
+## teleported out of the conversation; the snap is applied when it is released.
+var _pending_move_to: Vector2 = Vector2.ZERO
+var _has_pending_move: bool = false
+
 
 ## Bind an instance, place the node at its saved/current position, and ensure a
 ## collider and navigation agent exist. Safe to call before the node enters the
@@ -109,6 +120,10 @@ func setup(p_instance: NpcInstance) -> void:
 ## Instantly move to a world-space position and keep the instance authoritative
 ## position in sync. Used as the hard-snap fallback on skipped transitions.
 func move_to(p_position: Vector2) -> void:
+	if _conversation_busy:
+		_pending_move_to = p_position
+		_has_pending_move = true
+		return
 	global_position = p_position
 	if instance != null:
 		instance.position = p_position
@@ -143,10 +158,27 @@ func set_ai_enabled(enabled: bool, map: Map = null, seed_value: int = 0) -> void
 	evaluate_goal()
 
 
-## True while this NPC is actively pursuing a free-time goal. Ticket 016 uses
-## this as its "not-busy" gate for NPC-initiated interactions.
+## Freeze this NPC in place for a conversation without discarding its goal,
+## nav target or AI state. Selection/cancel unlocks it again.
+func set_conversation_busy(busy: bool) -> void:
+	_conversation_busy = busy
+	if busy:
+		velocity = Vector2.ZERO
+	elif _has_pending_move:
+		# Apply a class snap that arrived mid-conversation now that it is safe.
+		_has_pending_move = false
+		move_to(_pending_move_to)
+
+
+## True while this NPC is already talking to someone (ticket 014/016 gate).
+func is_conversation_busy() -> bool:
+	return _conversation_busy
+
+
+## True while this NPC is actively pursuing a goal or is in a conversation.
+## Ticket 016 uses this as its "not-busy" gate for NPC-initiated interactions.
 func is_busy() -> bool:
-	return _ai_enabled and instance != null and not instance.current_goal.is_empty()
+	return _conversation_busy or (_ai_enabled and instance != null and not instance.current_goal.is_empty())
 
 
 ## Walk to an externally imposed destination (class travel). This bypasses
@@ -222,7 +254,7 @@ func evaluate_goal() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not _ai_enabled or instance == null:
+	if not _ai_enabled or instance == null or _conversation_busy:
 		return
 
 	if _arrival_pause > 0.0:
