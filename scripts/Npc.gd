@@ -137,7 +137,11 @@ func move_to(p_position: Vector2) -> void:
 
 ## Enable or disable free-time AI. Disabling clears the active goal, stops
 ## movement and cancels any forced travel (used for BREAK / class fallback).
-func set_ai_enabled(enabled: bool, map: Map = null, seed_value: int = 0) -> void:
+## `preserve_goal` is the ticket-017 restore path: resume the serialized goal and
+## destination verbatim instead of rolling a fresh one on load.
+func set_ai_enabled(
+	enabled: bool, map: Map = null, seed_value: int = 0, preserve_goal: bool = false
+) -> void:
 	_ai_enabled = enabled
 	_map = map
 	_seed_value = seed_value
@@ -146,14 +150,28 @@ func set_ai_enabled(enabled: bool, map: Map = null, seed_value: int = 0) -> void
 	_arrival_pause = 0.0
 	_using_fallback = false
 	_force_fallback = false
-	_forced_destination = false
 	_avoid_elapsed = 0.0
 	velocity = Vector2.ZERO
 	if not enabled:
+		_forced_destination = false
+		_travel_timeout = -1.0
 		if instance != null:
 			instance.current_goal = ""
 			instance.goal_destination = Vector2.ZERO
 		return
+
+	if preserve_goal and instance != null and not instance.current_goal.is_empty():
+		# Saved in-flight goal: do NOT call evaluate_goal() (it would re-roll) and
+		# do NOT clear forced class travel (it was restored by resume_saved_goal).
+		_forced_destination = instance.current_goal.begins_with("class:")
+		_travel_timeout = maxf(0.0, travel_timeout_sec) if _forced_destination else -1.0
+		_last_position = global_position
+		if navigation_agent != null:
+			navigation_agent.target_position = instance.goal_destination
+		return
+
+	_forced_destination = false
+	_travel_timeout = -1.0
 	_last_position = global_position
 	evaluate_goal()
 
@@ -227,12 +245,16 @@ func is_forced_to(goal: String) -> bool:
 	return _forced_destination and instance != null and instance.current_goal == goal
 
 
-## Resume a forced destination restored from a save. Tickets 017+ call this
-## through setup() when a saved instance still carries a class-travel goal.
+## Resume a saved in-flight goal through setup(). Ticket-013 review finding 3:
+## goal_destination must be consumed on load, otherwise the serialized destination
+## is dead data and NPCs stay motionless when a save is restored into free time.
 func resume_saved_goal() -> void:
-	if instance == null or not instance.current_goal.begins_with("class:"):
+	if instance == null or instance.current_goal.is_empty():
 		return
-	set_forced_destination(instance.current_goal, instance.goal_destination)
+	if navigation_agent != null:
+		navigation_agent.target_position = instance.goal_destination
+	if instance.current_goal.begins_with("class:"):
+		set_forced_destination(instance.current_goal, instance.goal_destination)
 
 
 ## Pick a new free-time goal through NpcAi and aim the navigation agent at it.

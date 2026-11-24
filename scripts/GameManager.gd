@@ -29,6 +29,31 @@ func start_fresh_day() -> void:
 	change_scene("res://scenes/Game.tscn")
 
 
+## Load a saved day and enter Game.tscn. SaveManager validates the slot and
+## returns a SaveGame (or null on a recoverable error); storing it in
+## current_save is the signal Game.gd uses to take its restore branch instead of
+## starting a fresh day. A failed load leaves the current game untouched.
+func load_slot(slot_name: String) -> bool:
+	var save: SaveGame = SaveManager.load_slot(slot_name)
+	if save == null:
+		push_warning("[GameManager] load failed for slot '%s': %s" % [
+			slot_name, SaveManager.get_last_error()
+		])
+		return false
+	current_save = save
+	change_scene("res://scenes/Game.tscn")
+	return true
+
+
+## Load the most recently written compatible slot (F9 hotkey seam).
+func load_last_slot() -> bool:
+	var slot: String = SaveManager.get_last_saved_slot()
+	if slot.is_empty():
+		push_warning("[GameManager] no save slots available to load")
+		return false
+	return load_slot(slot)
+
+
 ## Transition to the scene at `path`. The actual change is deferred so it is
 ## safe to call from `_ready()` (avoids "parent node is busy" errors). Logs
 ## (does not crash) on failure so a missing scene surfaces as a recoverable

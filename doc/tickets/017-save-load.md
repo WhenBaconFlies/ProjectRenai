@@ -4,12 +4,12 @@
 
 **Blocked by:** 015 (Threshold resolution + deltas + meter/mood updates + feedback)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Save at DayEnd writes a Godot Resource file to `user://`
-- [ ] Autosave and manual save both work
-- [ ] Unlimited slots are supported
-- [ ] Reload restores player/NPC state (stats, mood, meters, positions, period) identically
-- [ ] Template linkage is preserved across save/load (stable IDs, not paths/UIDs)
-- [ ] A missing template on load is a recoverable error (no crash)
-- [ ] Save version field is present for forward compatibility
+- [x] Save at DayEnd writes a Godot Resource file to `user://`
+- [x] Autosave and manual save both work
+- [x] Unlimited slots are supported
+- [x] Reload restores player/NPC state (stats, mood, meters, positions, period) identically
+- [x] Template linkage is preserved across save/load (stable IDs, not paths/UIDs)
+- [x] A missing template on load is a recoverable error (no crash)
+- [x] Save version field is present for forward compatibility

@@ -380,6 +380,17 @@ func is_period_state(state: int) -> bool:
 	return period_number_for(state) > 0
 
 
+## True for the three free-time states. Takes the state explicitly (ticket 013
+## review finding 5) so callers reacting to a signal never read global state by
+## name and accidentally enable AI for the wrong phase.
+func is_free_time_state(state: int) -> bool:
+	return (
+		state == DayState.FREETIME1
+		or state == DayState.FREETIME2
+		or state == DayState.FREETIME3
+	)
+
+
 ## Map a period state (PERIOD1..PERIOD4) to its 1-based number, else 0.
 func period_number_for(state: int) -> int:
 	match state:

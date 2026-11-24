@@ -103,7 +103,44 @@ func spawn(parent: Node2D, map: Map, template_ids: Array) -> Array:
 	return spawned
 
 
-## Spawned instances for the most recent spawn() call (copy).
+## Rebuild Npc nodes from instances restored by a save (ticket 017). No template
+## lookup is needed here: each instance already carries its data and its stable
+## template_id, so a missing template only degrades AI/dialogue later and never
+## aborts the load. Report entries use status "restored".
+func spawn_from_instances(parent: Node2D, instances: Array) -> Array:
+	_instances.clear()
+	_report.clear()
+	if parent == null:
+		push_error("NpcSpawner.spawn_from_instances: no parent node; nothing restored")
+		return []
+
+	var spawned: Array = []
+	for instance_variant in instances:
+		var instance: NpcInstance = instance_variant as NpcInstance
+		if instance == null:
+			push_warning("NpcSpawner: non-NpcInstance entry in saved NPC list; skipping")
+			continue
+		if instance.instance_id.is_empty():
+			push_warning("NpcSpawner: saved NPC has no instance id; skipping")
+			continue
+
+		var npc := Npc.new()
+		npc.name = "Npc_%s" % instance.instance_id.replace(":", "_")
+		parent.add_child(npc)
+		npc.setup(instance)
+
+		_instances.append(instance)
+		spawned.append(npc)
+		_report.append({
+			"template_id": instance.template_id,
+			"instance_id": instance.instance_id,
+			"status": "restored",
+			"reason": "",
+		})
+	return spawned
+
+
+## Spawned instances for the most recent spawn()/spawn_from_instances() call (copy).
 func get_instances() -> Array:
 	return _instances.duplicate()
 

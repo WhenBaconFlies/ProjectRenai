@@ -18,6 +18,9 @@
 ## target (player or NPC), choose a random topic from the same filtered pool and
 ## emit `dialogue_topic_selected` — so resolution, deltas and feedback are shared
 ## with the player path and this script still applies no deltas itself.
+## Ticket 017 adds save/load: this script supplies a state provider to
+## SaveManager, restores player/NPC instances and the day snapshot when
+## GameManager.current_save is set, and handles the F5/F9 debug hotkeys.
 extends Node2D
 
 ## Emitted when the player picks a topic. Intentionally carries ids rather than
@@ -99,7 +102,27 @@ var _active_initiations: Array = []
 
 
 func _ready() -> void:
-	_setup_npcs()
+	_save_connect()
+	# Validate and restore the day BEFORE creating any NPC: a malformed payload
+	# must fall back to a genuinely fresh day, not one where saved NPCs survive
+	# with their old meters/positions (code-review finding 1).
+	var loaded_save: SaveGame = GameManager.current_save as SaveGame
+	if loaded_save != null:
+		if (
+			not loaded_save.is_well_formed()
+			or not TimeManager.restore_day_snapshot(loaded_save.day_snapshot)
+		):
+			push_warning("Game: malformed save payload; starting a fresh day")
+			GameManager.current_save = null
+			loaded_save = null
+			TimeManager.start_day(1)
+
+	# A loaded save carries its own NPC instances; spawn deep copies so the
+	# in-memory SaveGame in GameManager stays pristine (code-review finding 3).
+	if loaded_save != null:
+		_setup_npcs(_copy_instances(loaded_save.npc_instances))
+	else:
+		_setup_npcs()
 	_setup_player_instance()
 	_setup_dialogue()
 	_setup_feedback()
@@ -108,16 +131,18 @@ func _ready() -> void:
 	if not dialogue_topic_selected.is_connected(_on_dialogue_topic_selected):
 		dialogue_topic_selected.connect(_on_dialogue_topic_selected)
 	_time_connect()
-	# A fresh start has no save to restore. A loaded save (ticket 017) is
-	# restored by that ticket instead, so never overwrite a running clock.
-	if not TimeManager.is_running() and GameManager.current_save == null:
+	if loaded_save != null:
+		_restore_from_save(loaded_save)
+	elif not TimeManager.is_running():
 		TimeManager.start_day(1)
 
 
 ## --- NPC setup --------------------------------------------------------------
 
 ## Spawn NPCs under an "Npcs" node and wire their ids/stats into TimeManager.
-func _setup_npcs() -> void:
+## On a ticket-017 load the instances are rebuilt from the save instead of from
+## template ids, preserving every per-instance field verbatim.
+func _setup_npcs(p_restored_instances: Array = []) -> void:
 	var renderer := get_node_or_null("MapRenderer") as MapRenderer
 	_map = renderer.map if renderer != null else null
 
@@ -128,7 +153,10 @@ func _setup_npcs() -> void:
 		add_child(npcs_root)
 
 	_spawner = NpcSpawner.new()
-	_npcs = _spawner.spawn(npcs_root, _map, NpcSpawner.DEFAULT_TEMPLATE_IDS)
+	if p_restored_instances.is_empty():
+		_npcs = _spawner.spawn(npcs_root, _map, NpcSpawner.DEFAULT_TEMPLATE_IDS)
+	else:
+		_npcs = _spawner.spawn_from_instances(npcs_root, p_restored_instances)
 	_instances_by_id.clear()
 	_npcs_by_id.clear()
 	for npc_variant in _npcs:
@@ -170,6 +198,158 @@ func _setup_player_instance() -> void:
 	# Both sides of a conversation must resolve through one id map so tickets
 	# 015/016 can apply deltas uniformly (including player-targeted interactions).
 	_instances_by_id[_player_instance.instance_id] = _player_instance
+
+
+## --- Ticket 017: save / load -------------------------------------------------
+
+## Install the provider seam once the scene exists. SaveManager never reaches
+## into this scene; it calls back here for the mutable per-instance state.
+func _save_connect() -> void:
+	if SaveManager != null and SaveManager.has_method("set_state_provider"):
+		SaveManager.call("set_state_provider", Callable(self, "_provide_save_state"))
+
+
+## Live state snapshot for SaveManager. The player node is authoritative for its
+## current position (the instance is not mirrored every physics tick), so copy
+## it in just before serialization.
+func _provide_save_state() -> Dictionary:
+	if _player_instance != null:
+		var player_node := get_node_or_null("Player") as Node2D
+		if player_node != null:
+			_player_instance.position = player_node.global_position
+
+	var npcs: Array = []
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc != null and npc.instance != null:
+			npcs.append(npc.instance)
+	return {
+		"player_instance": _player_instance,
+		"npc_instances": npcs,
+		"show_relationship_feedback": show_relationship_feedback,
+	}
+
+
+## Apply a validated SaveGame to this scene. Called only by _ready() when
+## GameManager.load_slot() put a save in current_save before the scene change;
+## the day snapshot was already restored there, before any NPC was created.
+func _restore_from_save(save: SaveGame) -> void:
+	var saved_player: NpcInstance = save.player_instance as NpcInstance
+	var restored_player: NpcInstance = null
+	if saved_player != null and not saved_player.instance_id.is_empty():
+		# Deep copy, not an alias: dialogue/AI mutate instances during play while
+		# GameManager.current_save must keep matching the file on disk.
+		restored_player = NpcInstance.from_snapshot(saved_player.snapshot())
+	if restored_player != null:
+		_player_instance = restored_player
+		_player_template = _resolve_saved_template(restored_player)
+	else:
+		push_warning("Game: save has no usable player instance; keeping the freshly built one")
+	_warn_missing_templates()
+	if _player_instance != null:
+		_instances_by_id[_player_instance.instance_id] = _player_instance
+		# Player._ready() queues _snap_to_spawn() before this parent _ready() runs.
+		# Queue ours afterwards so the saved position wins over the map spawn.
+		call_deferred("_apply_restored_player_position")
+
+	set_relationship_feedback_enabled(save.show_relationship_feedback)
+	# restore_day_snapshot() assigns state directly and emits no state_changed,
+	# so AI must be synchronized explicitly (ticket-013 review finding 3).
+	sync_ai_state(true)
+	print("[Game] restored slot '%s': day=%d state=%s npcs=%d" % [
+		save.slot_name,
+		TimeManager.get_day_number(),
+		TimeManager.get_state_name(),
+		_npcs.size(),
+	])
+
+
+## Resolve a saved instance's template by stable id through the ModLoader. A
+## missing template is recoverable: keep the instance and log a warning, never
+## abort the load (spec acceptance criterion 7).
+func _resolve_saved_template(instance: NpcInstance) -> CharacterTemplate:
+	if instance == null or instance.template_id.is_empty():
+		return null
+	var loader: Node = NpcInstance._mod_loader()
+	if loader == null:
+		return null
+	var bucket: Variant = loader.get("TYPE_CHARACTER")
+	var bucket_name: String = str(bucket) if bucket != null else "character"
+	return loader.call("get_resource", bucket_name, instance.template_id) as CharacterTemplate
+
+
+## Deep copies of the saved instances via their snapshot seam, so scene-side
+## mutation (meters, mood, position every physics tick) never changes the
+## SaveGame resource still held by GameManager.current_save.
+func _copy_instances(instances: Array) -> Array:
+	var copies: Array = []
+	for entry in instances:
+		var instance: NpcInstance = entry as NpcInstance
+		if instance == null:
+			continue
+		var copy: NpcInstance = NpcInstance.from_snapshot(instance.snapshot())
+		if copy != null:
+			copies.append(copy)
+	return copies
+
+
+## One diagnostic for every restored instance whose authored template is gone
+## (or has an empty id). Missing templates remain recoverable — this is only the
+## operator-visible warning the design promises (code-review finding 6).
+func _warn_missing_templates() -> void:
+	var missing: Array[String] = []
+	if _player_instance != null and (
+		_player_instance.template_id.is_empty() or _player_instance.resolve_template() == null
+	):
+		missing.append(_player_instance.instance_id)
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc == null or npc.instance == null:
+			continue
+		var instance: NpcInstance = npc.instance
+		if instance.template_id.is_empty() or instance.resolve_template() == null:
+			missing.append(instance.instance_id)
+	if not missing.is_empty():
+		push_warning("Game: missing template for saved instance(s): %s; load continues" % ", ".join(missing))
+
+
+## Runs after Player's deferred spawn snap; restores the saved world position.
+func _apply_restored_player_position() -> void:
+	var player_node := get_node_or_null("Player") as Node2D
+	if player_node != null and _player_instance != null:
+		player_node.global_position = _player_instance.position
+
+
+## Enable/disable AI from the current day state. Used both by normal state
+## changes and by the load path; `preserve_saved_goals` resumes a serialized
+## in-flight goal instead of rolling a new one.
+func sync_ai_state(preserve_saved_goals: bool = false) -> void:
+	var state: int = TimeManager.get_state()
+	var free: bool = _is_free_time_state(state)
+	_class_travel_issued = false
+	_skip_pending = false
+	_initiation_elapsed = 0.0
+	var seed_value: int = TimeManager.get_day_number()
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc == null:
+			continue
+		if free:
+			npc.set_ai_enabled(true, _map, seed_value, preserve_saved_goals)
+		else:
+			npc.set_ai_enabled(false)
+
+
+## Debug hotkeys (menus are deferred in v1). F5 writes the reserved manual slot;
+## F9 loads the most recently written compatible slot.
+func _unhandled_input(event: InputEvent) -> void:
+	if InputMap.has_action("manual_save") and event.is_action_pressed("manual_save"):
+		if SaveManager.save_slot(SaveManager.MANUAL_SLOT, {}, true):
+			print("[Game] manual save complete")
+		else:
+			push_warning("[Game] manual save failed: %s" % SaveManager.get_last_error())
+	elif InputMap.has_action("manual_load") and event.is_action_pressed("manual_load"):
+		GameManager.load_last_slot()
 
 
 ## Connect the proximity trigger and the pool UI. Missing nodes are a soft
@@ -544,11 +724,11 @@ func _player_id() -> String:
 	return configured if not configured.is_empty() else FALLBACK_PLAYER_ID
 
 
-## True for FREETIME1/2/3. state_changed fires after TimeManager updates its
-## state, so get_state_name() reflects `state`; the string check avoids depending
-## on autoload enum access from a scene script.
+## True for FREETIME1/2/3. Uses the state argument (ticket-013 review finding 5)
+## rather than reading global TimeManager state by name, so a restore or a queued
+## signal can never enable AI for the wrong phase.
 func _is_free_time_state(state: int) -> bool:
-	return state > 0 and TimeManager.get_state_name().begins_with("FREETIME")
+	return TimeManager.is_free_time_state(state)
 
 
 ## Advance NPC-initiation timers every frame, then issue class travel once in the
@@ -648,14 +828,7 @@ func _on_state_changed(new_state: int, _old_state: int) -> void:
 		# Class/BREAK/DAYEND must not inherit a conversation lock or hold timer.
 		_clear_active_initiations()
 	if _is_free_time_state(new_state):
-		_class_travel_issued = false
-		_skip_pending = false
-		_initiation_elapsed = 0.0
-		var seed_value: int = TimeManager.get_day_number()
-		for npc_variant in _npcs:
-			var active_npc: Npc = npc_variant as Npc
-			if active_npc != null:
-				active_npc.set_ai_enabled(true, _map, seed_value)
+		sync_ai_state()
 		return
 
 	var was_skip: bool = _skip_pending
