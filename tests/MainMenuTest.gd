@@ -132,10 +132,10 @@ func _run() -> void:
 		var screen: Node = get_tree().current_scene
 		_check(screen != null and screen.name == str(route[1]),
 			"%s button enters %s.tscn without crashing" % [route[0], route[1]])
-		# Options is a real screen now (ticket 030); Load/Mods stay placeholders.
+		# Options and Mods are real screens now (tickets 030/031); Load stays a placeholder.
 		var title_path: String = "CenterBox/TitleLabel"
 		var back_path: String = "CenterBox/BackButton"
-		if str(route[1]) == "Options":
+		if str(route[1]) == "Options" or str(route[1]) == "ModsMenu":
 			title_path = "TitleLabel"
 			back_path = "BackButton"
 		var title := screen.get_node_or_null(title_path) as Label
