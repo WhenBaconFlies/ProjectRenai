@@ -4,11 +4,13 @@
 
 **Blocked by:** 014 (Dialogue filtering + pool + player trigger)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Selecting a topic runs the threshold check and reports success/failure
-- [ ] Margin scales the affection delta
-- [ ] Affection, familiarity, and mood deltas apply to both initiator and recipient meters
-- [ ] Relationship type is re-derived after meters update (Stranger/Friend/Enemy/Lover)
-- [ ] Feedback (meter change) is shown after interaction by default
-- [ ] Feedback toggle (save option) is respected
+- [x] Selecting a topic runs the threshold check and reports success/failure
+- [x] Margin scales the affection delta
+- [x] Affection, familiarity, and mood deltas apply to both initiator and recipient meters
+- [x] Relationship type is re-derived after meters update (Stranger/Acquaintance/Friend/Enemy/Lover — Acquaintance added by user decision)
+- [x] Feedback (meter change) is shown after interaction by default
+- [x] Feedback toggle (save option) is respected
+
+**Verification:** 64/64 headless Godot 4.2.1 checks pass (`ALL_015_CHECKS_PASSED`) covering all six criteria; design and acceptance mapping in `doc/tickets/015-threshold-resolution-meter-updates-design.md`; implementation decisions in `doc/idea-v1-decisions.md` (Ticket 015 section).

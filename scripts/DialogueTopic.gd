@@ -79,3 +79,18 @@ extends Resource
 
 ## Mood delta applied on failure.
 @export var mood_delta_failure: int = 0
+
+
+## --- Recipient modifiers (ticket 015) ---
+##
+## Data-driven influence of the *recipient's* traits/stats on resolution. Each
+## entry is a Dictionary with these keys (unspecified keys use the default):
+##   "id": String          trait id / trait tag, or a stat name (required)
+##   "kind": String        "trait" (default) or "stat"
+##   "min": int            stat-only threshold (default 0)
+##   "difficulty": int     added to effective difficulty when matched (default 0)
+##   "delta_scale": float  multiplied into every delta the recipient receives
+##                         (default 1.0; combined scale clamped to 0.25–2.0)
+## An empty list means authored difficulty and verbatim deltas, so existing
+## topics keep their original behaviour.
+@export var recipient_modifiers: Array = []

@@ -11,13 +11,18 @@
 ## finish the walk at class start; skipped transitions still hard-snap. All of
 ## this happens BEFORE start_day() so the initial PERIOD1 transition is observed.
 ## Ticket 014 adds the player-facing dialogue trigger: a pure filter builds a
-## pool, the pool UI shows it, and this script only wires the two together. No
-## resolution happens here — ticket 015 consumes `dialogue_topic_selected`.
+## pool, the pool UI shows it, and this script only wires the two together.
+## Ticket 015 adds the resolver: this script still applies no deltas itself, it
+## forwards the selection to `DialogueResolver` and shows optional feedback.
 extends Node2D
 
 ## Emitted when the player picks a topic. Intentionally carries ids rather than
 ## node references so the pipeline stays pair-agnostic for ticket 016.
 signal dialogue_topic_selected(topic: DialogueTopic, initiator_id: String, target_id: String)
+
+## Emitted after a topic has been resolved, carrying the resolver's result
+## Dictionary (roll breakdown, deltas, before/after meters and relationship).
+signal dialogue_resolved(result: Dictionary)
 
 ## Roster id for the player. Mirrors TimeManager's exported default; the player
 ## instance shape arrives with the save/load ticket, so for now only the id and
@@ -28,6 +33,11 @@ const FALLBACK_PLAYER_ID: String = "player"
 ## scheduled marker. On the large debug map classroom↔hangout walks can take up
 ## to ~9 s, so this gives them time to arrive near the start of class.
 @export var class_travel_lead_sec: float = 8.0
+
+## Show the post-interaction meter-change panel (ticket 015 save option). On by
+## default; ticket 017 persists this flag in the save payload. The runtime seam
+## is set_relationship_feedback_enabled() below.
+@export var show_relationship_feedback: bool = true
 
 
 var _npcs: Array = []
@@ -42,6 +52,7 @@ var _player_template: CharacterTemplate = null
 ## Conversation wiring. Only one conversation can be open at a time.
 var _interaction: InteractionComponent = null
 var _dialogue_ui: DialoguePoolUI = null
+var _feedback_ui: InteractionFeedbackUI = null
 var _dialogue_target: Npc = null
 var _dialogue_open: bool = false
 
@@ -56,6 +67,11 @@ func _ready() -> void:
 	_setup_npcs()
 	_setup_player_instance()
 	_setup_dialogue()
+	_setup_feedback()
+	# 014 emits the selection before closing the conversation; resolving here
+	# keeps the pure resolver out of the UI scripts and the scene tree entirely.
+	if not dialogue_topic_selected.is_connected(_on_dialogue_topic_selected):
+		dialogue_topic_selected.connect(_on_dialogue_topic_selected)
 	_time_connect()
 	# A fresh start has no save to restore. A loaded save (ticket 017) is
 	# restored by that ticket instead, so never overwrite a running clock.
@@ -140,6 +156,24 @@ func _setup_dialogue() -> void:
 		push_warning("Game: no DialoguePoolUI under DialogueLayer; dialogue pool disabled")
 
 
+## Locate the optional feedback panel. A stripped scene simply has no feedback.
+func _setup_feedback() -> void:
+	_feedback_ui = get_node_or_null("FeedbackLayer/InteractionFeedbackUI") as InteractionFeedbackUI
+	if _feedback_ui == null:
+		push_warning("Game: no InteractionFeedbackUI under FeedbackLayer; feedback disabled")
+
+
+## Feedback save-option runtime seam (ticket 017 persists the exported flag).
+func set_relationship_feedback_enabled(enabled: bool) -> void:
+	show_relationship_feedback = enabled
+	if not enabled and _feedback_ui != null:
+		_feedback_ui.hide_feedback()
+
+
+func is_relationship_feedback_enabled() -> bool:
+	return show_relationship_feedback
+
+
 ## Open the pool for the nearest NPC in range. E works at any time of day
 ## (user decision); only proximity and an already-open conversation gate it.
 func _on_interaction_requested(target: Npc) -> void:
@@ -181,15 +215,63 @@ func _on_interaction_requested(target: Npc) -> void:
 		_dialogue_ui.show_pool(pool, _player_instance.instance_id, target.instance.instance_id)
 
 
-## Selection ends the interaction. Resolution belongs to ticket 015, which
-## listens for the signal; nothing is rolled or written here.
+## Selection ends the interaction. Resolution is a separate listener on the
+## signal; nothing is rolled or written here.
 func _on_topic_selected(topic: DialogueTopic, initiator_id: String, target_id: String) -> void:
 	if not _dialogue_open:
 		return
-	# Emit while the player and target are still locked: ticket 015 resolves the
-	# topic from this signal and must see the interaction as still in progress.
+	# Emit while the player and target are still locked: the resolver runs from
+	# this signal and must see the interaction as still in progress.
 	dialogue_topic_selected.emit(topic, initiator_id, target_id)
 	_close_conversation()
+
+
+## Ticket 015: resolve the selected topic for both parties and show feedback.
+## Instances are looked up by id (014 registered the player too) so an NPC can
+## later be the initiator without changing this seam.
+func _on_dialogue_topic_selected(
+	topic: DialogueTopic, initiator_id: String, target_id: String
+) -> void:
+	var initiator: NpcInstance = _instances_by_id.get(initiator_id) as NpcInstance
+	var target: NpcInstance = _instances_by_id.get(target_id) as NpcInstance
+	if initiator == null or target == null:
+		var topic_label: String = topic.id if topic != null else "<null>"
+		push_warning("Game: cannot resolve '%s' — unknown initiator/target id" % topic_label)
+		return
+
+	var result: Dictionary = DialogueResolver.resolve(
+		topic,
+		initiator,
+		target,
+		_template_for(initiator, initiator_id),
+		_template_for(target, target_id)
+	)
+	if result.is_empty():
+		return
+	dialogue_resolved.emit(result)
+
+	if show_relationship_feedback and _feedback_ui != null:
+		_feedback_ui.show_result(
+			result,
+			_display_name_for(initiator, initiator_id),
+			_display_name_for(target, target_id)
+		)
+
+
+## The player's template is cached at setup; NPC instances resolve theirs from
+## the ModLoader registry by stable template id.
+func _template_for(instance: NpcInstance, id: String) -> CharacterTemplate:
+	if id == _player_id() and _player_template != null:
+		return _player_template
+	return instance.resolve_template()
+
+
+func _display_name_for(instance: NpcInstance, id: String) -> String:
+	if id == _player_id():
+		return "You"
+	if instance != null and not instance.display_name.is_empty():
+		return instance.display_name
+	return id
 
 
 ## Cancel (or dismissing the empty fallback) ends the interaction with no pick.

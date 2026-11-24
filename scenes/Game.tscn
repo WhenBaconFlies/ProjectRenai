@@ -1,29 +1,29 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3 uid="uid://bbfvd1hyf536b"]
 
 [ext_resource type="Script" path="res://scripts/MapRenderer.gd" id="1_mr"]
-[ext_resource type="Resource" path="res://resources/maps/map_school.tres" id="2_map"]
+[ext_resource type="Resource" uid="uid://clwrjy4w6pk51" path="res://resources/maps/map_school.tres" id="2_map"]
 [ext_resource type="Script" path="res://scripts/Player.gd" id="3_player"]
 [ext_resource type="Script" path="res://scripts/FollowCamera.gd" id="4_camera"]
 [ext_resource type="Script" path="res://scripts/Minimap.gd" id="5_minimap"]
 [ext_resource type="Script" path="res://scripts/Game.gd" id="6_game"]
 [ext_resource type="Script" path="res://scripts/InteractionComponent.gd" id="7_interaction"]
 [ext_resource type="Script" path="res://scripts/DialoguePoolUI.gd" id="8_dialogue_ui"]
+[ext_resource type="Script" path="res://scripts/InteractionFeedbackUI.gd" id="9_feedback"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 6.0
 
 [node name="Game" type="Node2D"]
 script = ExtResource("6_game")
+show_relationship_feedback = false
 
 [node name="MapRenderer" type="Node2D" parent="."]
 script = ExtResource("1_mr")
 map = ExtResource("2_map")
 
 [node name="Player" type="CharacterBody2D" parent="."]
-groups = ["player"]
 position = Vector2(56, 24)
 script = ExtResource("3_player")
-map_renderer_path = NodePath("../MapRenderer")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
 shape = SubResource("CircleShape2D_player")
@@ -33,33 +33,40 @@ script = ExtResource("7_interaction")
 
 [node name="FollowCamera" type="Camera2D" parent="Player"]
 script = ExtResource("4_camera")
-map_renderer_path = NodePath("../../MapRenderer")
-zoom_level = 4.0
-smoothing_speed = 10.0
 
 [node name="MinimapLayer" type="CanvasLayer" parent="."]
-layer = 1
 
 [node name="Minimap" type="Control" parent="MinimapLayer"]
 custom_minimum_size = Vector2(180, 150)
+layout_mode = 3
+anchors_preset = 1
 anchor_left = 1.0
-anchor_top = 0.0
 anchor_right = 1.0
-anchor_bottom = 0.0
 offset_left = -186.0
 offset_top = 6.0
 offset_right = -6.0
 offset_bottom = 156.0
 mouse_filter = 2
 script = ExtResource("5_minimap")
-player_path = NodePath("../../Player")
-map_renderer_path = NodePath("../../MapRenderer")
 
 [node name="DialogueLayer" type="CanvasLayer" parent="."]
 layer = 2
 
 [node name="DialoguePoolUI" type="Control" parent="DialogueLayer"]
+layout_mode = 3
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 script = ExtResource("8_dialogue_ui")
+
+[node name="FeedbackLayer" type="CanvasLayer" parent="."]
+layer = 3
+
+[node name="InteractionFeedbackUI" type="Control" parent="FeedbackLayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("9_feedback")
