@@ -90,7 +90,6 @@ var _dialogue_open: bool = false
 var _conversation: Conversation = null
 var _conversation_seq: int = 0
 var _conversation_npc_id: String = ""
-var _conversation_npc: Npc = null
 var _topics_for_conversation: Array = []
 var _greetings_for_conversation: Array = []
 var _responses_for_conversation: Array = []
@@ -477,17 +476,25 @@ func _show_line(
 		_conversation_ui.show_line(speaker, line, labels, listener)
 
 
-## Forward a resolver payload to the existing feedback panel using the session's
-## initiator/target ids (the roll direction flips for NPC-initiated replies).
+## Forward a resolver payload to the existing feedback panel. The resolver's
+## `initiator`/`target` keys follow the ROLL direction, which flips for an
+## NPC-initiated reply (player rolls, NPC is targeted) while the session ids keep
+## the conversation direction (NPC speaks, player replies).
 func _show_conversation_feedback(result: Dictionary) -> void:
 	if result.is_empty() or not show_relationship_feedback or _feedback_ui == null:
 		return
 	if _conversation == null:
 		return
+	var roll_initiator_id: String = _conversation.get_initiator_id()
+	var roll_target_id: String = _conversation.get_target_id()
+	if _conversation.is_npc_initiated():
+		var swap: String = roll_initiator_id
+		roll_initiator_id = roll_target_id
+		roll_target_id = swap
 	_feedback_ui.show_result(
 		result,
-		_name_for_id(_conversation.get_initiator_id()),
-		_name_for_id(_conversation.get_target_id())
+		_name_for_id(roll_initiator_id),
+		_name_for_id(roll_target_id)
 	)
 
 
@@ -579,7 +586,6 @@ func _on_interaction_requested(target: Npc) -> void:
 	_responses_for_conversation = resources.get("responses", [])
 	_index_conversation_responses(_responses_for_conversation)
 	_conversation_npc_id = target.instance.instance_id
-	_conversation_npc = target
 	_dialogue_target = target
 	_dialogue_open = true
 	_lock_conversation_parties(target)
@@ -733,7 +739,6 @@ func _close_conversation() -> void:
 	_conversation_actions.clear()
 	_conversation = null
 	_dialogue_target = null
-	_conversation_npc = null
 	_conversation_npc_id = ""
 	_dialogue_open = false
 	if _interaction != null:
@@ -839,7 +844,7 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 	# Ticket 024: only an NPC→player initiation uses the overlay and the reply
 	# shape. NPC↔NPC keeps v1's immediate resolution (no player can answer).
 	if target_id == _player_id():
-		_begin_npc_conversation(initiator, initiator_id, seed_value)
+		_begin_npc_conversation(initiator, initiator_id)
 		return
 
 	var pool: Array = DialogueFilter.build_pool(
@@ -878,9 +883,29 @@ func _try_one_initiation(initiator: Npc, initiator_id: String, topics: Array, se
 		dialogue_resolved.emit(result)
 
 
+## Topics that have at least two authored rollable replies. Only these can open
+## an NPC-initiated talk; otherwise the 2-3 reply contract silently collapses to
+## the generated single-line fallback (review finding 2).
+func _topics_with_replies(topics: Array, responses: Array) -> Array:
+	var supported: Dictionary = {}
+	for item in responses:
+		var reply: DialogueResponse = item as DialogueResponse
+		if reply == null or reply.is_line_only() or reply.topic_id.is_empty():
+			continue
+		supported[reply.topic_id] = int(supported.get(reply.topic_id, 0)) + 1
+	var result: Array = []
+	for item in topics:
+		var topic: DialogueTopic = item as DialogueTopic
+		if topic == null:
+			continue
+		if int(supported.get(topic.id, 0)) >= 2:
+			result.append(topic)
+	return result
+
+
 ## Open the NPC-initiated reply flow with the player as the target. The opening
 ## topic is spoken only (no roll/deltas); the player's reply is the final change.
-func _begin_npc_conversation(initiator: Npc, initiator_id: String, seed_value: int) -> void:
+func _begin_npc_conversation(initiator: Npc, initiator_id: String) -> void:
 	if _dialogue_open or _conversation_ui == null or initiator.instance == null:
 		return
 	var resources: Dictionary = _dialogue_resources()
@@ -895,13 +920,17 @@ func _begin_npc_conversation(initiator: Npc, initiator_id: String, seed_value: i
 	_responses_for_conversation = resources.get("responses", [])
 	_index_conversation_responses(_responses_for_conversation)
 	_conversation_npc_id = initiator_id
-	_conversation_npc = initiator
 	_dialogue_target = null
 	_dialogue_open = true
 	_lock_conversation_parties(initiator, initiator_id)
 	_initiation_cooldowns[initiator_id] = npc_initiation_cooldown_sec
 
-	var opening: Dictionary = _conversation.choose_opening_topic(_topics_for_conversation)
+	var opening_topics: Array = _topics_with_replies(
+		_topics_for_conversation, _responses_for_conversation
+	)
+	if opening_topics.is_empty():
+		opening_topics = _topics_for_conversation
+	var opening: Dictionary = _conversation.choose_opening_topic(opening_topics)
 	npc_interaction_started.emit(str(opening.get("id", "")), initiator_id, _player_id())
 	_show_line(
 		_npc_name(), str(opening.get("text", "")), ["Continue"],
@@ -1099,7 +1128,8 @@ func _stats_for(id: String) -> Dictionary:
 ## when the transition came from skip() or the lead window was missed.
 func _on_state_changed(new_state: int, _old_state: int) -> void:
 	if not _is_free_time_state(new_state):
-		# Class/BREAK/DAYEND must not inherit a conversation lock or hold timer.
+		# Hold timers are cleared on leaving free time; an open conversation keeps
+		# its own locks until _close_conversation() (see _clear_active_initiations).
 		_clear_active_initiations()
 	if _is_free_time_state(new_state):
 		sync_ai_state()

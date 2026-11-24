@@ -9,7 +9,7 @@
 extends Node
 
 
-const EXPECTED_CHECKS: int = 36
+const EXPECTED_CHECKS: int = 38
 
 var _passed: int = 0
 var _failed: int = 0
@@ -51,7 +51,7 @@ func _run() -> void:
 	await _check_gate_callable()
 	await _check_npc_initiated_flow()
 	await _check_no_candidate_safety()
-	_check(_passed == EXPECTED_CHECKS - 1, "T36: all expected 024 checks executed")
+	_check(_passed == EXPECTED_CHECKS - 1, "T39: all expected 024 checks executed")
 	_finish()
 
 
@@ -220,6 +220,11 @@ func _check_npc_initiated_flow() -> void:
 		_check(false, "T25: NPC-initiated setup (missing scene nodes)")
 		return
 	_check(true, "T25: NPC-initiated setup is available")
+	# Clear any queued result from the player path so the feedback labels checked
+	# below come from the reply roll, not an earlier panel.
+	var feedback_ui: Node = _game.get_node_or_null("FeedbackLayer/InteractionFeedbackUI")
+	if feedback_ui != null:
+		feedback_ui.call("hide_feedback")
 	var initiator: Npc = npcs_root.get_child(0) as Npc
 	for child in npcs_root.get_children():
 		var npc: Npc = child as Npc
@@ -258,6 +263,16 @@ func _check_npc_initiated_flow() -> void:
 	await _frames(3)
 	_check(_resolved.size() > resolved_before, "T30: the reply resolves with a roll")
 	_check(_meters_changed(meters_before, _snapshot_meters(initiator)), "T31: reply applies the final deltas")
+	# The resolver's initiator is the player for this roll even though the
+	# Conversation session records the NPC as its initiator.
+	var initiator_line: Label = feedback_ui.get("_initiator_line") as Label if feedback_ui != null else null
+	var target_line: Label = feedback_ui.get("_target_line") as Label if feedback_ui != null else null
+	_check(
+		initiator_line != null and target_line != null
+		and initiator_line.text.begins_with("You:")
+		and target_line.text.begins_with("%s:" % initiator.instance.display_name),
+		"T37: feedback labels follow the roll direction, not the session ids"
+	)
 	var line_label: Label = ui.get("_line_label") as Label
 	_check(
 		line_label != null and line_label.text == reply_text,
@@ -269,6 +284,35 @@ func _check_npc_initiated_flow() -> void:
 	ui.call("cancel_conversation")
 	await _frames(2)
 	_check(not ui.is_open() and not bool(player.call("is_input_locked")), "T34: NPC-initiated talk releases input")
+
+	# Force an opening topic with no authored replies. The Game wiring must still
+	# pick a reply-supported topic so the 2-3 option contract holds in real play.
+	for child in npcs_root.get_children():
+		var npc: Npc = child as Npc
+		if npc != null:
+			npc.set_conversation_busy(npc != initiator)
+	busy.clear()
+	cooldowns.clear()
+	player.global_position = initiator.global_position + Vector2(8.0, 0.0)
+	await _frames(2)
+	var unauthored: Array = []
+	var unauthored_topic: DialogueTopic = load("res://resources/dialogue/topic_ask_art.tres") as DialogueTopic
+	if unauthored_topic != null:
+		unauthored.append(unauthored_topic)
+	_game.call("_try_one_initiation", initiator, initiator.instance.instance_id, unauthored, 9999)
+	await _frames(3)
+	var forced_opening: Array = ui.call("get_choices") as Array
+	if forced_opening.size() == 1:
+		_send_key_to(ui, KEY_1)
+		await _frames(2)
+	var forced_replies: Array = ui.call("get_choices") as Array
+	_check(
+		forced_replies.size() >= 2 and forced_replies.size() <= 3,
+		"T38: an opening topic without authored replies still offers 2-3 options"
+	)
+	if ui.is_open():
+		ui.call("cancel_conversation")
+		await _frames(2)
 
 
 func _check_no_candidate_safety() -> void:
