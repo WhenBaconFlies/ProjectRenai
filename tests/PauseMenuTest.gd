@@ -8,7 +8,7 @@
 ## the pause and conversation overlays. Prints ALL_028_CHECKS_PASSED on a full pass.
 extends Node
 
-const EXPECTED_CHECKS: int = 40
+const EXPECTED_CHECKS: int = 42
 const SLOT: String = "pause_ui_alpha"
 
 var _passed: int = 0
@@ -118,14 +118,18 @@ func _run() -> void:
 	_check(status.text.contains("Saved slot '%s'" % SLOT),
 		"T16: the save result is reported in the overlay")
 
-	# --- Load routes out, resumes, and shows the new slot ----------------------
+	# --- Load embeds the real Load Game screen; Back returns to pause ----------
 	var load_button: Button = pause.get_node_or_null("Box/MenuBox/LoadButton") as Button
 	load_button.pressed.emit()
-	await _settle()
-	var screen: Node = get_tree().current_scene
-	_check(screen != null and screen.name == "LoadGame", "T17: Load routes to the Load Game screen")
-	_check(not TimeManager.is_paused(), "T18: the clock resumes before leaving the game")
-	var slot_list: VBoxContainer = screen.get_node_or_null("CenterBox/SlotScroll/SlotList") as VBoxContainer
+	await _frames(2)
+	var embedded_load: Node = pause.get_node_or_null("PanelHost/LoadGame")
+	_check(str(pause.call("get_embedded_screen_name")) == "LoadGame"
+		and embedded_load != null and not _visible(pause, "Box"),
+		"T17: Load embeds the real Load Game screen without swapping scenes")
+	_check(get_tree().current_scene == game and bool(game.call("is_paused"))
+		and TimeManager.is_paused(),
+		"T18: the live game stays paused while the embedded Load screen is open")
+	var slot_list: VBoxContainer = embedded_load.get_node_or_null("CenterBox/SlotScroll/SlotList") as VBoxContainer
 	var listed: bool = false
 	if slot_list != null:
 		for i in range(slot_list.get_child_count()):
@@ -134,18 +138,13 @@ func _run() -> void:
 				listed = true
 				break
 	_check(listed, "T19: the slot created from pause appears in the Load Game list")
+	_embedded_back(embedded_load)
+	await _frames(2)
+	_check(str(pause.call("get_embedded_screen_name")) == ""
+		and _visible(pause, "Box") and bool(game.call("is_paused")),
+		"T19b: Back from the embedded Load screen returns to the paused game")
 
 	# --- Options / Mods are embedded panels that return to pause ---------------
-	GameManager.start_fresh_day()
-	await _settle()
-	game = get_tree().current_scene
-	game.set("npc_initiation_enabled", false)
-	game.set("class_travel_lead_sec", 0.0)
-	pause = game.get_node_or_null("PauseLayer/PauseMenu")
-	_send_action(game, "ui_cancel")
-	await _frames(2)
-	_check(bool(game.call("is_paused")) and bool(pause.call("is_open")),
-		"T20: Escape reopens the pause overlay on a fresh day")
 
 	var options_button: Button = pause.get_node_or_null("Box/MenuBox/OptionsButton") as Button
 	options_button.pressed.emit()
@@ -273,7 +272,37 @@ func _run() -> void:
 		"T36c: a new pause session clears rejected text and status")
 	_send_action(game, "ui_cancel")
 	await _frames(2)
-	_check(_passed == EXPECTED_CHECKS - 1, "T40: every planned check ran")
+
+	# In-editor finding 2: leaving gameplay must stop the day clock, otherwise a
+	# later New Game skips start_day() and NPCs never get their AI re-initialised.
+	GameManager.show_load_game()
+	await _settle()
+	var menu_screen: Node = get_tree().current_scene
+	var menu_back: Button = menu_screen.get_node_or_null("CenterBox/BackButton") as Button
+	menu_back.pressed.emit()
+	await _settle()
+	GameManager.start_fresh_day()
+	await _settle()
+	var replay: Node = get_tree().current_scene
+	_check(replay != null and replay.name == "Game"
+		and TimeManager.get_day_number() == 1
+		and TimeManager.get_state_name() == "PERIOD1"
+		and TimeManager.is_running() and not TimeManager.is_paused(),
+		"T41: leaving through menus stops the day so the next New Game restarts it")
+
+	TimeManager.advance(46.0)
+	await _frames(2)
+	var replay_npcs: Node = replay.get_node_or_null("Npcs")
+	var ai_ready: bool = false
+	if replay_npcs != null:
+		for child in replay_npcs.get_children():
+			var npc: Npc = child as Npc
+			if npc != null and npc.instance != null and not npc.instance.current_goal.is_empty():
+				ai_ready = true
+				break
+	_check(ai_ready, "T42: NPCs receive free-time goals after that fresh New Game")
+
+	_check(_passed == EXPECTED_CHECKS - 1, "FINAL: every planned check ran")
 
 	_finish()
 

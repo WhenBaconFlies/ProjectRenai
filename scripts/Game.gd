@@ -532,20 +532,16 @@ func close_pause() -> void:
 	print("[Game] resumed")
 
 
-func _on_pause_route_requested(screen: String) -> void:
-	if screen == "load":
-		close_pause()
-		GameManager.show_load_game()
-	else:
-		close_pause()
+func _on_pause_route_requested(_screen: String) -> void:
+	close_pause()
 
 
-## A scene swap while paused (e.g. the Load route) must not leak a paused clock
-## into the next scene.
+## No gameplay scene means no running day. Leaving _running true here made the
+## next New Game skip TimeManager.start_day(), so AI was never re-initialised and
+## NPCs stood still while remaining interactable (in-editor finding 2).
 func _exit_tree() -> void:
-	if _paused:
-		TimeManager.set_paused(false)
-		_paused = false
+	TimeManager.stop_day()
+	_paused = false
 
 
 ## Install the default free-time gate unless a caller injected one.

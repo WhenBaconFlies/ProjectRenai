@@ -16,6 +16,11 @@ const SLOT_ROW_PREFIX: String = "SlotRow_"
 const NO_SLOTS_TEXT: String = "No saved games yet — create one from the pause menu while playing."
 const READY_TEXT: String = "Select a slot to load or delete."
 
+## Ticket 028: when this screen is embedded in the pause overlay, Back returns
+## to pause instead of leaving the live game. Invalid callables restore the
+## normal Main Menu route (mirrors MainMenu.set_quit_action / PlaceholderScreen).
+var back_action: Callable = Callable()
+
 @onready var _slot_list: VBoxContainer = $CenterBox/SlotScroll/SlotList
 @onready var _status_label: Label = $CenterBox/StatusLabel
 @onready var _back_button: Button = $CenterBox/BackButton
@@ -202,5 +207,14 @@ func _reset_delete_rows() -> void:
 		(entry["cancel_button"] as Button).visible = false
 
 
+func set_back_action(action: Callable) -> void:
+	back_action = action if action.is_valid() else Callable(self, "_default_back")
+
+
 func _on_back_pressed() -> void:
+	var action: Callable = back_action if back_action.is_valid() else Callable(self, "_default_back")
+	action.call()
+
+
+func _default_back() -> void:
 	GameManager.show_main_menu()

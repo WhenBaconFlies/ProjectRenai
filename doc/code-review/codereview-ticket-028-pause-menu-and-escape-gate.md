@@ -4,7 +4,7 @@
 - **Base:** `master` (merge-base: `ca0bdf22c9297a3fad301aea18b439bf9229143b`)
 - **Reviewed commit:** `8b1a8a6` (`feat(028): add Pause Menu + Escape gate with whole-scene freeze`)
 - **Changed files at review:** 11
-- **Findings:** 3 (High: 1, Medium: 1, Low: 1) — all three fixed and re-verified
+- **Findings:** 5 (High: 3, Medium: 1, Low: 1) — findings 1–3 from the code review, 4–5 from the user's in-editor check; all five fixed and re-verified
 - **Verifier:** `code-reviewer` subagent; evidence audit (`evidence-validator`) PASS
 
 ## Findings
@@ -48,8 +48,26 @@ The first fix attempt used `set_input_as_handled()` directly on `Node`; Godot 4.
 
 **Verdict: PASS** — every finding has a file:line reference and a concrete code path; no vague claims retained.
 
-## Final verification (after fixes)
+## In-editor verification findings (user-reported after the code review)
 
-- `tests/run_pause_menu_tests.ps1`: `ALL_028_CHECKS_PASSED`, `PAUSE_MENU_028_OK`, 40/40.
+### 4. [High][Bug] Back from the pause menu's Load screen went to the Main Menu
+
+- **Location:** `scripts/PauseMenu.gd` (`_on_load_pressed`), `scripts/LoadGame.gd` (`_on_back_pressed`)
+- **Evidence:** user report from the editor: "if you open the load menu from the in game pause menu and then press back, it brings you to the main menu instead of back to the in game pause menu". Pre-fix `PauseMenu._on_load_pressed()` emitted `route_requested("load")`, which called `GameManager.show_load_game()` — a real scene swap — so `LoadGame._on_back_pressed()`'s unconditional `GameManager.show_main_menu()` left the live game behind.
+- **Problem:** the paused session was stranded; the user offered removing the Load button as a fallback.
+- **Recommendation (applied):** embed `res://scenes/LoadGame.tscn` in `PanelHost` like Options/Mods, and add `back_action`/`set_back_action()` to `LoadGame.gd` so Back returns to pause. Main Menu's Load Game route is unchanged. Harness T17 (embedded), T18 (game still paused), T19 (slot listed), T19b (Back → pause).
+- **Verification:** `[028] PASS T19b: Back from the embedded Load screen returns to the paused game`.
+
+### 5. [High][Bug] Second New Game had frozen but interactable NPCs
+
+- **Location:** `scripts/Game.gd` (`_exit_tree` / `_ready`)
+- **Evidence:** user report: "after I started a new game, then paused it, then pressed back to bring me to the home menu, then started a new game again, none of the NPCs were moving but I could still start interactions with them". Pausing sets `TimeManager._paused` but leaves `_running == true`; scene swaps never called `stop_day()`, so `Game._ready()`'s `elif not TimeManager.is_running(): TimeManager.start_day(1)` was skipped and `sync_ai_state()` never re-enabled AI.
+- **Problem:** gameplay state from the previous day leaked into a new day; NPCs were frozen while interactions still worked.
+- **Recommendation (applied):** `Game._exit_tree()` now calls `TimeManager.stop_day()` unconditionally. Harness T41 asserts a fresh day 1 / PERIOD1 / running clock after a menu round-trip; T42 asserts NPCs receive free-time goals.
+- **Verification:** `[028] PASS T41`, `[028] PASS T42`.
+
+## Final verification (after all fixes)
+
+- `tests/run_pause_menu_tests.ps1`: `ALL_028_CHECKS_PASSED`, `PAUSE_MENU_028_OK`, 42/42.
 - Regressions: 018 (42/42), 019, 020, 021 (23/23), 022 (23/23), 023 (35/35), 024 (42/42), 025 (21/21), 026 (23/23), 027 (35/35) — all `_OK`.
 - No source files were modified by the reviewer; fixes were applied by the implementer and re-verified.

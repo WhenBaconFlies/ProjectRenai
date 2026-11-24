@@ -3,12 +3,12 @@
 ## In-game pause overlay (ticket 028). The live Game scene stays loaded while
 ## this is open: Game.gd freezes the clock, NPCs and player input, then calls
 ## open()/close() here. The menu owns no game state — named slots are written
-## through SaveManager's live-state provider, and routes other than Load stay
-## inside the overlay so the paused day is never stranded by a scene swap.
+## through SaveManager's live-state provider — and Load/Options/Mods embed their
+## screens into PanelHost so the paused day is never stranded by a scene swap.
 ##
-## Options and Mods embed the current placeholder scenes into PanelHost. They get
-## an injected Back action returning to the pause menu; when tickets 030/031
-## replace those scenes, the real screens appear here without touching this file.
+## Embedded screens get an injected Back action returning to the pause menu;
+## when tickets 030/031 replace Options/Mods, the real screens appear here
+## without touching this file.
 
 class_name PauseMenu
 extends Control
@@ -19,8 +19,10 @@ signal route_requested(screen: String)
 
 const OPTIONS_SCENE: String = "res://scenes/Options.tscn"
 const MODS_SCENE: String = "res://scenes/ModsMenu.tscn"
+## Load is embedded too: a real scene swap would make its Back button leave the
+## live game instead of returning to pause (in-editor finding 1).
+const LOAD_SCENE: String = "res://scenes/LoadGame.tscn"
 const ROUTE_RESUME: String = "resume"
-const ROUTE_LOAD: String = "load"
 
 @onready var _box: PanelContainer = $Box
 @onready var _status_label: Label = $Box/MenuBox/StatusLabel
@@ -122,8 +124,7 @@ func _on_resume_pressed() -> void:
 
 
 func _on_load_pressed() -> void:
-	_close_embedded()
-	route_requested.emit(ROUTE_LOAD)
+	_embed_screen(LOAD_SCENE)
 
 
 func _on_options_pressed() -> void:
