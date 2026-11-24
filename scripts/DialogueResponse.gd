@@ -48,6 +48,24 @@ extends Resource
 @export var relationship_bands: PackedStringArray = PackedStringArray()
 
 
+## --- Optional reply eligibility (ticket 023) ---
+## These gates are used only when a response is offered as an NPC-initiated reply
+## (DialogueFilter.build_reply_pool()). Defaults are wildcards so every response
+## authored before ticket 023 stays eligible.
+
+## Minimum speaker mood (0-100) for this reply to be offered. 0 = no gate.
+@export var min_mood: int = 0
+
+## Maximum speaker mood (0-100) for this reply to be offered. 100 = no gate.
+@export var max_mood: int = 100
+
+## Trait ids/tags required on either party for this reply to be offered.
+@export var required_traits: PackedStringArray = PackedStringArray()
+
+## Interest ids/tags required on either party for this reply to be offered.
+@export var required_interests: PackedStringArray = PackedStringArray()
+
+
 ## --- Optional roll fields ---
 
 ## Stat used in the threshold check: stat + (familiarity / 10) + random(0..5)

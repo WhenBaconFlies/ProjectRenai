@@ -96,6 +96,11 @@ func is_open() -> bool:
 func show_result(result: Dictionary, initiator_name: String, target_name: String) -> void:
 	if result.is_empty():
 		return
+	# Line-only reactions are spoken lines, not stat checks. Without this gate the
+	# panel would render a misleading "Not quite..." plus a bogus 0+0+0 vs 0 roll
+	# (ticket 023's resolved response fallback produces line-only outcomes).
+	if bool(result.get("line_only", false)) or not bool(result.get("show_feedback", true)):
+		return
 	if _is_open:
 		_queue.append({
 			"result": result,
