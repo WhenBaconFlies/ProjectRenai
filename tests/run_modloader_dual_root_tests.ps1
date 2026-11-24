@@ -36,7 +36,7 @@ $godotExit = $LASTEXITCODE
 $output = Get-Content -Path $logPath -Raw
 Write-Host "Godot raw exit code: $godotExit"
 
-if ($output -match 'ALL_029_CHECKS_PASSED' -and $output -notmatch '\[029\] FAIL') {
+if ($output -match 'ALL_029_CHECKS_PASSED' -and $output -notmatch '\[029\] FAIL' -and $output -notmatch "cannot open mods directory 'user://mods/'") {
     Write-Host 'MODLOADER_DUAL_ROOT_029_OK'
     exit 0
 }

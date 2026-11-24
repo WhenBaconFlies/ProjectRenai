@@ -327,10 +327,22 @@ func _base_resource_paths(dir_path: String) -> Array[String]:
 ## validated manifests into `mods`. Scan order is the caller's responsibility:
 ## an id already present is skipped, so the earlier (bundled) root wins.
 func _discover_mods(root_path: String, mods: Dictionary, root_index: int = 0) -> void:
+	if not DirAccess.dir_exists_absolute(root_path):
+		if root_path.begins_with("user://"):
+			# A fresh install has no user mods yet. Create the folder so there is
+			# an obvious install location, and do not warn about an empty root.
+			var made: int = DirAccess.make_dir_recursive_absolute(root_path)
+			if made != OK:
+				_log("WARN: cannot create mods directory '%s' (error %d); skipping this root" % [root_path, made])
+				return
+		else:
+			# A missing bundled root is a packaging problem, not an empty install.
+			_log("WARN: cannot open mods directory '%s'; skipping this root" % root_path)
+			return
+
 	var dir: DirAccess = DirAccess.open(root_path)
 	if dir == null:
-		# A missing root is normal for user://mods/ on a fresh install: warn but
-		# keep scanning the other roots.
+		# Genuine open failures (permissions, etc.) still get a diagnostic.
 		_log("WARN: cannot open mods directory '%s' (error %d); skipping this root" % [root_path, DirAccess.get_open_error()])
 		return
 

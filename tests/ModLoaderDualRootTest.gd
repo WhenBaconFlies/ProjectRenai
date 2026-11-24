@@ -15,7 +15,7 @@ const ROOT_B: String = "user://modloader029_root_b/"
 const SETTINGS_PATH: String = "user://modloader029_settings.cfg"
 const ENTRY_MARKER: String = "user://modloader029_entry_marker.txt"
 
-const EXPECTED_CHECKS: int = 19
+const EXPECTED_CHECKS: int = 20
 
 var _passed: int = 0
 var _failed: int = 0
@@ -38,12 +38,15 @@ func _run() -> void:
 
 	_remove_file(SETTINGS_PATH)
 	SettingsManager.set_config_path(SETTINGS_PATH)
+	_clear_empty_user_mods_root()
 
 	# --- Default scan roots ---------------------------------------------------
 	ModLoader.load_mods()
 	var roots: Array = ModLoader.get_mods_roots()
 	_check(roots.has("res://mods/") and roots.has("user://mods/"),
 		"T1: load_mods() scans both the bundled and user-writable roots")
+	_check(DirAccess.dir_exists_absolute("user://mods/"),
+		"T17: a missing user mods root is created on startup")
 	_check(ModLoader.get_mods_root() == "res://mods/",
 		"T1b: get_mods_root() still reports the bundled root for v1 callers")
 
@@ -231,6 +234,23 @@ func _write_text(path: String, text: String) -> void:
 func _remove_file(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
+
+
+## Start from a genuinely missing user root, but never delete real user mods.
+func _clear_empty_user_mods_root() -> void:
+	var dir: DirAccess = DirAccess.open("user://mods/")
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	var empty: bool = true
+	while entry != "":
+		if entry != "." and entry != "..":
+			empty = false
+		entry = dir.get_next()
+	dir.list_dir_end()
+	if empty:
+		DirAccess.remove_absolute("user://mods/")
 
 
 func _remove_dir_recursive(path: String) -> void:
