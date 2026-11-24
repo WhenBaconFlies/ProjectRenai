@@ -22,6 +22,14 @@ var current_save = null
 ## Path of the scene currently considered "active" (informational).
 var current_scene_path: String = ""
 
+## Number of scene swaps actually started. Public so headless harnesses can
+## assert that a repeated button press does not queue a second swap.
+var scene_change_count: int = 0
+
+## Set while a swap is queued, cleared on the frame after it starts so a second
+## request in the same frame cannot double-load a scene.
+var _scene_change_pending: bool = false
+
 
 func _ready() -> void:
 	# Fresh start is the default: no save to restore, no crash.
@@ -95,11 +103,23 @@ func load_last_slot() -> bool:
 ## (does not crash) on failure so a missing scene surfaces as a recoverable
 ## error rather than a hard crash.
 func change_scene(path: String) -> void:
+	if _scene_change_pending:
+		push_warning("[GameManager] scene change to '%s' ignored; a swap is already pending" % path)
+		return
+	_scene_change_pending = true
 	current_scene_path = path
 	call_deferred("_do_change_scene", path)
 
 
 func _do_change_scene(path: String) -> void:
+	scene_change_count += 1
 	var err: int = get_tree().change_scene_to_file(path)
+	# The clear is deferred to the end of this frame: a second press in the
+	# same frame is still blocked, but the next frame's legitimate route is not.
+	call_deferred("_clear_scene_change_pending")
 	if err != OK:
 		push_error("GameManager: failed to load scene '%s' (error %d)" % [path, err])
+
+
+func _clear_scene_change_pending() -> void:
+	_scene_change_pending = false

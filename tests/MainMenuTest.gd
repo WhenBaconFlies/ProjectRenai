@@ -8,7 +8,7 @@
 ## harness. Prints ALL_026_CHECKS_PASSED only when every assertion passed.
 extends Node
 
-const EXPECTED_CHECKS: int = 21
+const EXPECTED_CHECKS: int = 22
 
 var _passed: int = 0
 var _failed: int = 0
@@ -69,6 +69,25 @@ func _run() -> void:
 		quit_button.pressed.emit()
 	_check(_quit_calls == 1, "T5: Quit presses its action exactly once")
 
+	# --- A repeated press in one frame must not queue a second swap -----------
+	var swaps_before: int = GameManager.scene_change_count
+	var load_button := menu.get_node_or_null("CenterBox/LoadGameButton") as Button
+	if load_button != null:
+		load_button.pressed.emit()
+		load_button.pressed.emit()
+	await _settle()
+	var double_press_scene: Node = get_tree().current_scene
+	_check(GameManager.scene_change_count == swaps_before + 1
+		and double_press_scene != null and double_press_scene.name == "LoadGame",
+		"T5b: a repeated press starts exactly one scene swap")
+	if double_press_scene != null:
+		var back_from_double := double_press_scene.get_node_or_null("CenterBox/BackButton") as Button
+		if back_from_double != null:
+			back_from_double.pressed.emit()
+	await _settle()
+	# The first MainMenu instance was freed by that detour; re-acquire the live one.
+	menu = get_tree().current_scene as Control
+
 	# --- New Game starts the shipped debug day through the v1 path ------------
 	var new_game_button := menu.get_node_or_null("CenterBox/NewGameButton") as Button
 	if new_game_button != null:
@@ -94,17 +113,25 @@ func _run() -> void:
 		"T10: New Game uses the shipped char:alex player template")
 
 	# --- Placeholder routes and Back navigation -------------------------------
+	# New Game left us in the playable day; return to the menu to press its buttons.
+	GameManager.show_main_menu()
+	await _settle()
 	var routes: Array = [
-		["show_load_game", "LoadGame", "Load Game"],
-		["show_options", "Options", "Options"],
-		["show_mods_menu", "ModsMenu", "Mods Menu"],
+		["LoadGameButton", "LoadGame", "Load Game"],
+		["OptionsButton", "Options", "Options"],
+		["ModsButton", "ModsMenu", "Mods Menu"],
 	]
 	for route in routes:
-		GameManager.call(str(route[0]))
+		var menu_screen: Control = get_tree().current_scene as Control
+		var button: Button = null
+		if menu_screen != null:
+			button = menu_screen.get_node_or_null("CenterBox/%s" % route[0]) as Button
+		if button != null:
+			button.pressed.emit()
 		await _settle()
 		var screen: Node = get_tree().current_scene
 		_check(screen != null and screen.name == str(route[1]),
-			"Route %s enters %s.tscn without crashing" % [route[0], route[1]])
+			"%s button enters %s.tscn without crashing" % [route[0], route[1]])
 		var title := screen.get_node_or_null("CenterBox/TitleLabel") as Label
 		_check(title != null and title.text == str(route[2]),
 			"%s placeholder names the screen" % route[1])
@@ -126,10 +153,20 @@ func _run() -> void:
 	_check(_passed + _failed == EXPECTED_CHECKS,
 		"T22: every planned check ran")
 
-	# Quit from the menu rather than mid-day.
+	# --- Exercise the shipped Quit path in the real process -------------------
+	# A fresh MainMenu instance has no injected quit_action, so this press flows
+	# MainMenu -> GameManager.quit_game() -> get_tree().quit(). The marker is
+	# printed before the engine exits; no self-quit is needed afterwards.
 	GameManager.show_main_menu()
 	await _settle()
-	_finish()
+	var final_menu: Control = get_tree().current_scene as Control
+	var real_quit_pressed: bool = false
+	if final_menu != null:
+		var real_quit_button := final_menu.get_node_or_null("CenterBox/QuitButton") as Button
+		if real_quit_button != null:
+			real_quit_button.pressed.emit()
+			real_quit_pressed = true
+	_finish(real_quit_pressed)
 
 
 func _settle() -> void:
@@ -149,10 +186,12 @@ func _check(ok: bool, label: String) -> void:
 		print("[026] FAIL " + label)
 
 
-func _finish() -> void:
+func _finish(real_quit_already_pressed: bool = false) -> void:
 	print("[026] RESULT passed=%d failed=%d" % [_passed, _failed])
 	if _failed == 0:
 		print("ALL_026_CHECKS_PASSED")
 	else:
 		print("SOME_026_CHECKS_FAILED")
-	get_tree().quit(0 if _failed == 0 else 1)
+	# When the real Quit button already requested exit, let that path do it.
+	if not real_quit_already_pressed:
+		get_tree().quit(0 if _failed == 0 else 1)

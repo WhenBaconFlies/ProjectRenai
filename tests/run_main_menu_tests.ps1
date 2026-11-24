@@ -33,6 +33,9 @@ if (-not (Test-Path $GodotPath)) {
 }
 
 Write-Host "Running ticket 026 main-menu harness from $projectRoot"
+# Tee-Object does not truncate the file when a run emits nothing; clear it so a
+# crashed run can never be judged PASS from a previous run's marker.
+Remove-Item $logPath -ErrorAction SilentlyContinue
 & $GodotPath --headless --path $projectRoot 'res://tests/MainMenuBootstrap.tscn' 2>&1 | Tee-Object -FilePath $logPath
 $godotExit = $LASTEXITCODE
 
