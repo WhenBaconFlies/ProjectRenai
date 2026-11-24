@@ -310,9 +310,10 @@ func _node_wiring() -> bool:
 	friend.current_goal = "hangout:hangout_only"
 	_meter(instance, friend, 65, 65)
 
-	if not ClassDB.class_has_method("Npc", "set_relationship_roster"):
-		return false
 	var npc := Npc.new()
+	if not npc.has_method("set_relationship_roster"):
+		npc.free()
+		return false
 	add_child(npc)
 	npc.setup(instance)
 	npc.call("set_relationship_roster", [friend])
