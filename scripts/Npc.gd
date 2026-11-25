@@ -73,6 +73,9 @@ var _eval_count: int = 0
 ## goal weighting. Empty for directly-constructed harness NPCs, which keeps
 ## v1's interest/mood selection unchanged.
 var _relationship_roster: Array = []
+## Roster id of the player, forwarded to NpcAi so a configured player id still
+## uses the position-based seek path.
+var _relationship_player_id: String = NpcAi.PLAYER_ID
 
 var _stuck_elapsed: float = 0.0
 var _fallback_elapsed: float = 0.0
@@ -270,8 +273,10 @@ func resume_saved_goal() -> void:
 ## Supply the live roster used by NpcAi's directed-meter weighting (ticket 032).
 ## The instances are held by reference, so meter changes made during dialogue are
 ## visible on the next goal evaluation without re-wiring.
-func set_relationship_roster(instances: Array) -> void:
+func set_relationship_roster(instances: Array, player_id: String = "") -> void:
 	_relationship_roster = instances
+	if not player_id.is_empty():
+		_relationship_player_id = player_id
 
 
 ## Pick a new free-time goal through NpcAi and aim the navigation agent at it.
@@ -280,7 +285,8 @@ func evaluate_goal() -> void:
 		return
 	var template: CharacterTemplate = instance.resolve_template()
 	var result: Dictionary = NpcAi.select_goal(
-		instance, template, _map, _seed_value, _eval_count, _relationship_roster
+		instance, template, _map, _seed_value, _eval_count,
+		_relationship_roster, _relationship_player_id
 	)
 	_eval_count += 1
 

@@ -39,10 +39,10 @@
 
 **Interfaces:**
 - Consumes: `NpcAi.relationship_candidates(instance: NpcInstance, all_instances: Array) -> Array`; `NpcAi.select_goal(instance, template, map, seed_value, eval_count, all_instances: Array = []) -> Dictionary`; `NpcInstance.meters`, `current_goal`, `position`; `Map.get_hangout_marker_names()`, `Map.get_marker()`; `Npc.setup()`, `Npc.set_relationship_roster()`, `Npc.set_ai_enabled()`.
-- Produces: marker `ALL_032_CHECKS_PASSED`, check prefix `[032]`, `EXPECTED_CHECKS = 17`.
+- Produces: marker `ALL_032_CHECKS_PASSED`, check prefix `[032]`, `EXPECTED_CHECKS = 19` (18 behavior checks plus the final count check; T17/T18 added by the code-review fixes).
 
 - [ ] **Step 1: Write bootstrap + launcher** following `tests/ConversationHelperBootstrap.*` and `tests/run_conversation_helper_tests.ps1`, with log `renai-npc-goals-032.log` and success tokens `ALL_032_CHECKS_PASSED` + `NPC_GOALS_032_OK`.
-- [ ] **Step 2: Write `NpcGoalsTest.gd` with these 16 behaviors plus a final count check (T17).** Helpers construct `NpcInstance`, `CharacterTemplate`, `Map` directly (no scene tree); a 4-marker map mirrors `map_school.tres`: `hangout_cafeteria`, `hangout_courtyard`, `hangout_garden`, `hangout_library`.
+- [ ] **Step 2: Write `NpcGoalsTest.gd` with these 18 behaviors plus a final count check (T19).** Helpers construct `NpcInstance`, `CharacterTemplate`, `Map` directly (no scene tree); a 4-marker map mirrors `map_school.tres`: `hangout_cafeteria`, `hangout_courtyard`, `hangout_garden`, `hangout_library`.
   - T1: `relationship_candidates(null, [])` and `relationship_candidates(instance, [])` return empty arrays.
   - T2: meter `{"familiarity": 25, "affection": 25}` toward `npc:friend` yields exactly one candidate with `relationship == "Friend"` and `weight == 5`.
   - T3: `{"familiarity": 65, "affection": 65}` yields `"Lover"`, `weight == 8`.
@@ -59,7 +59,9 @@
   - T14: a Friend candidate whose `current_goal` names a missing marker still produces a valid hangout goal from the remaining markers; no crash, no empty goal.
   - T15: a roster containing `null`, non-`NpcInstance` values, self, and a duplicate id does not crash or create a self-candidate.
   - T16: build a real `Npc` node, `setup(instance)`, `set_relationship_roster([friend])`, `set_ai_enabled(true, single_marker_map, 7)`; the node's instance ends with the friend's hangout goal and destination.
-  - T17: `_check(_passed == EXPECTED_CHECKS - 1, "T17: all expected 032 checks executed")`, then print `ALL_032_CHECKS_PASSED` only when `_failed == 0`.
+  - T17 (code-review fix): an enemy player on a zero-hangout map yields no goal, never `avoid:player` at the player's position.
+  - T18 (code-review fix): a configured player id (`npc:hero`) is sought via the pure seam and through an `Npc` node's `set_relationship_roster(roster, player_id)`.
+  - T19: `_check(_passed == EXPECTED_CHECKS - 1, "T19: all expected 032 checks executed")`, then print `ALL_032_CHECKS_PASSED` only when `_failed == 0`.
 - [ ] **Step 3: Run `powershell -ExecutionPolicy Bypass -File .\tests\run_npc_goals_tests.ps1`.** Expected: `NPC_GOALS_032_FAILED`, no `ALL_032_CHECKS_PASSED`, `[032] FAIL` lines for unimplemented seams. Record this RED output in the ledger.
 - [ ] **Step 4: Commit** `tests/NpcGoals*` + `tests/run_npc_goals_tests.ps1` with message `test(032): add relationship-driven goal harness (RED)`.
 
@@ -70,7 +72,7 @@
 
 **Interfaces:**
 - Consumes: `DialogueResolver.REL_FRIEND_FAM/AFF`, `REL_LOVER_FAM/AFF`, `REL_ENEMY_AFF`; `NpcInstance.meters`, `current_goal`, `position`, `instance_id`.
-- Produces: `relationship_candidates(instance, all_instances) -> Array` of `{id, instance, relationship, weight, familiarity, affection}`; `select_goal(..., all_instances: Array = [])`; constants `SEEK_FRIEND_WEIGHT = 5`, `SEEK_LOVER_WEIGHT = 8`, `AVOID_ENEMY_WEIGHT = -100`, `PLAYER_ID = "player"`.
+- Produces: `relationship_candidates(instance, all_instances) -> Array` of `{id, instance, relationship, weight, familiarity, affection}`; `select_goal(..., all_instances: Array = [], player_id: String = PLAYER_ID)`; constants `SEEK_FRIEND_WEIGHT = 5`, `SEEK_LOVER_WEIGHT = 8`, `AVOID_ENEMY_WEIGHT = -100`, `PLAYER_ID = "player"`. Non-positive `player:*` candidates are skipped so an avoided player is never a goal destination.
 
 - [ ] **Step 1: Implement `relationship_candidates()`.** Defensive iteration (skip null/non-`NpcInstance`/self/duplicate id), non-Dictionary meters treated as empty, thresholds in Lover → Enemy → Friend order exactly as `DialogueResolver.relationship_type()` orders them. No template lookup.
 - [ ] **Step 2: Extend `select_goal()` with the optional 6th parameter and fold candidates into the existing weighted loop.** Candidate-to-destination rule: `player` id → `player.position` with `seek:<id>`/`avoid:<id>` goal and base weight 1; NPC → the hangout in `current_goal` if it still exists on the map, otherwise `hangouts[posmod(target.instance_id.hash(), hangouts.size())]`; add the candidate weight to that hangout's v1 base weight. Pick over strictly positive weights; if the total is ≤ 0, roll over base weights instead. Keep the existing RNG seed and candidate order for empty rosters.

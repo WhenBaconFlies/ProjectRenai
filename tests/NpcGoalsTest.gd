@@ -9,7 +9,7 @@
 extends Node
 
 
-const EXPECTED_CHECKS: int = 17
+const EXPECTED_CHECKS: int = 19
 ## Number of seeded samples per distribution check. Small enough to stay fast,
 ## large enough that a +5/+8 weight dominates the base weight of 1.
 const SAMPLES: int = 64
@@ -39,7 +39,9 @@ func _run() -> void:
 	_check(_stale_marker_fallback(), "T14: a missing candidate marker falls back to a valid hangout without crashing")
 	_check(_defensive_roster(), "T15: null/foreign/self/duplicate roster entries are ignored")
 	_check(_node_wiring(), "T16: an Npc node with a roster seeks the friend's hangout through set_ai_enabled")
-	_check(_passed == EXPECTED_CHECKS - 1, "T17: all expected 032 checks executed")
+	_check(_enemy_player_no_hangouts(), "T17: an enemy player never becomes a goal destination when no hangout qualifies")
+	_check(_configured_player_id(), "T18: a configured player id is sought by both the pure seam and an Npc node")
+	_check(_passed == EXPECTED_CHECKS - 1, "T19: all expected 032 checks executed")
 	_finish()
 
 
@@ -113,12 +115,14 @@ func _select(
 	map: Map,
 	seed_value: int,
 	eval_count: int,
-	roster: Array
+	roster: Array,
+	player_id: String = ""
 ) -> Dictionary:
+	var args: Array = [instance, template, map, seed_value, eval_count, roster]
+	if not player_id.is_empty():
+		args.append(player_id)
 	var ai_script: Script = load("res://scripts/NpcAi.gd") as Script
-	var result: Variant = ai_script.callv(
-		"select_goal", [instance, template, map, seed_value, eval_count, roster]
-	)
+	var result: Variant = ai_script.callv("select_goal", args)
 	if result is Dictionary:
 		return result as Dictionary
 	return {}
@@ -283,11 +287,12 @@ func _stale_marker_fallback() -> bool:
 	_meter(instance, friend, 25, 25)
 	var map := _map()
 	var names: Array = map.get_hangout_marker_names()
-	var result: Dictionary = _select(instance, CharacterTemplate.new(), map, 9, 2, [friend])
-	var goal: String = str(result.get("goal", ""))
-	if not goal.begins_with("hangout:"):
-		return false
-	return names.has(goal.substr("hangout:".length()))
+	var expected: String = str(names[posmod(friend.instance_id.hash(), names.size())])
+	var goal: String = "hangout:%s" % expected
+	var template: CharacterTemplate = CharacterTemplate.new()
+	var baseline: Dictionary = _goal_counts(instance, template, map, [])
+	var boosted: Dictionary = _goal_counts(instance, template, map, [friend])
+	return int(boosted.get(goal, 0)) > int(baseline.get(goal, 0))
 
 
 func _defensive_roster() -> bool:
@@ -324,3 +329,48 @@ func _node_wiring() -> bool:
 	)
 	npc.free()
 	return ok
+
+
+## --- Code-review fixes: enemy player safety + configured player id ----------
+
+func _enemy_player_no_hangouts() -> bool:
+	var instance := _instance("npc:self")
+	var player := _instance("player")
+	player.position = Vector2(321, 77)
+	_meter(instance, player, 0, -25)
+	var result: Dictionary = _select(instance, CharacterTemplate.new(), _map(false), 3, 1, [player])
+	var destination: Variant = result.get("destination", null)
+	return (
+		str(result.get("goal", "")).is_empty()
+		and (destination == null or (destination is Vector2 and (destination as Vector2) == Vector2.ZERO))
+	)
+
+
+func _configured_player_id() -> bool:
+	var instance := _instance("npc:self")
+	var player := _instance("npc:hero")
+	player.position = Vector2(321, 77)
+	_meter(instance, player, 65, 65)
+	var map := _map(false)
+	var pure: Dictionary = _select(instance, CharacterTemplate.new(), map, 3, 1, [player], "npc:hero")
+	var pure_ok: bool = (
+		str(pure.get("goal", "")) == "seek:npc:hero"
+		and str(pure.get("destination", "")) == str(Vector2(321, 77))
+	)
+	if not pure_ok:
+		return false
+
+	var npc := Npc.new()
+	if not npc.has_method("set_relationship_roster"):
+		npc.free()
+		return false
+	add_child(npc)
+	npc.setup(instance)
+	npc.call("set_relationship_roster", [player], "npc:hero")
+	npc.set_ai_enabled(true, map, 7)
+	var wired_ok: bool = (
+		instance.current_goal == "seek:npc:hero"
+		and instance.goal_destination == Vector2(321, 77)
+	)
+	npc.free()
+	return wired_ok

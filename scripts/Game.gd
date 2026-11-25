@@ -259,7 +259,7 @@ func _wire_relationship_roster() -> void:
 	for npc_variant in _npcs:
 		var npc: Npc = npc_variant as Npc
 		if npc != null:
-			npc.set_relationship_roster(roster)
+			npc.set_relationship_roster(roster, _player_id())
 
 
 ## --- Ticket 019: tiered simulation ------------------------------------------

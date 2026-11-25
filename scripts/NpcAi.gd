@@ -41,8 +41,9 @@ const SEEK_LOVER_WEIGHT: int = 8
 ## destination out of the roll while any positive candidate exists; if every
 ## candidate is negative, the v1 base weights are restored so play never stalls.
 const AVOID_ENEMY_WEIGHT: int = -100
-## The player's instance id; the player has no hangout marker, so its position is
-## used as the destination instead. Mirrors Game.FALLBACK_PLAYER_ID.
+## Default player instance id; the player has no hangout marker, so its position
+## is used as the destination instead. Callers with a configured player id pass
+## it as `select_goal()`'s optional `player_id` argument.
 const PLAYER_ID: String = "player"
 
 
@@ -61,7 +62,8 @@ static func select_goal(
 	map: Map,
 	seed_value: int,
 	eval_count: int,
-	all_instances: Array = []
+	all_instances: Array = [],
+	player_id: String = PLAYER_ID
 ) -> Dictionary:
 	var no_goal: Dictionary = {"goal": "", "destination": Vector2.ZERO}
 	if instance == null or map == null:
@@ -69,7 +71,7 @@ static func select_goal(
 
 	var hangouts: Array = map.get_hangout_marker_names()
 	var relationship_weights: Dictionary = _relationship_weights_by_key(
-		instance, all_instances, hangouts, map
+		instance, all_instances, hangouts, map, player_id
 	)
 	if hangouts.is_empty() and relationship_weights.is_empty():
 		return no_goal
@@ -116,6 +118,10 @@ static func select_goal(
 			continue
 		var target_id: String = key.substr("player:".length())
 		var delta: int = int(relationship_weights[key])
+		# An avoided player has no separate safe destination: using its position
+		# would make the NPC walk toward the enemy it is meant to avoid.
+		if delta <= 0:
+			continue
 		var destination: Vector2 = _position_for(all_instances, target_id, map.spawn_point)
 		var goal: String = ("seek:" if delta > 0 else "avoid:") + target_id
 		candidates.append({
@@ -232,7 +238,7 @@ static func relationship_candidates(instance: NpcInstance, all_instances: Array)
 ## Map each relationship candidate to a weight delta keyed by hangout marker
 ## name, or by "player:<id>" for the player's position-based candidate.
 static func _relationship_weights_by_key(
-	instance: NpcInstance, all_instances: Array, hangouts: Array, map: Map
+	instance: NpcInstance, all_instances: Array, hangouts: Array, map: Map, player_id: String
 ) -> Dictionary:
 	var weights: Dictionary = {}
 	for entry in relationship_candidates(instance, all_instances):
@@ -247,7 +253,7 @@ static func _relationship_weights_by_key(
 		if delta == 0:
 			continue
 		var key: String = ""
-		if target.instance_id == PLAYER_ID:
+		if target.instance_id == player_id:
 			key = "player:%s" % target.instance_id
 		else:
 			key = _candidate_hangout(target, hangouts, map)
