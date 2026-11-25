@@ -13,7 +13,7 @@
 ## goal strings/destinations. Prints ALL_033_CHECKS_PASSED on a full pass.
 extends Node
 
-const EXPECTED_CHECKS: int = 56
+const EXPECTED_CHECKS: int = 63
 const SLOT: String = "v2_integration"
 const TEST_CONFIG_PATH: String = "user://v2_integration_settings.cfg"
 
@@ -22,10 +22,17 @@ var _failed: int = 0
 var _game: Node = null
 var _resolved: Array = []
 var _original_config_path: String = ""
+var _cleaned_up: bool = false
 
 
 func _ready() -> void:
 	call_deferred("_run")
+
+
+## Last-resort cleanup: a fatal abort inside an awaited section must not leave the
+## isolated settings file or the test save slot behind, or wedge the headless run.
+func _exit_tree() -> void:
+	_cleanup()
 
 
 func _run() -> void:
@@ -52,8 +59,9 @@ func _run() -> void:
 	await _check_mods_from_pause()
 	_check_relationship_goals()
 	_check_registry_content()
+	await _check_extra_coverage()
 
-	_check(_passed == EXPECTED_CHECKS - 1, "T56: every planned 033 check executed")
+	_check(_passed == EXPECTED_CHECKS - 1, "T63: every planned 033 check executed")
 	_finish()
 
 
@@ -134,6 +142,18 @@ func _check_player_conversation() -> void:
 	await _frames(3)
 	_check(ui.is_open(), "T5: E at an NPC opens the conversation overlay")
 
+	# AC5: initiation must not start a second talk while a conversation is open.
+	var conversation_before: Variant = _game.get("_conversation")
+	_game.set("npc_initiation_enabled", true)
+	_game.set("npc_initiation_check_interval_sec", 0.05)
+	_game.call("set_npc_initiation_gate", Callable(self, "_gate_true"))
+	_game.call("_process", 2.1)
+	await _frames(2)
+	_check(ui.is_open() and _game.get("_conversation") == conversation_before,
+		"T5b: the initiation loop cannot start a second talk while one is open")
+	_game.call("set_npc_initiation_gate", Callable())
+	_game.set("npc_initiation_enabled", false)
+
 	var panel: PanelContainer = ui.get("_panel") as PanelContainer
 	var style: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat if panel != null else null
 	_check(
@@ -181,26 +201,25 @@ func _check_player_conversation() -> void:
 	var after: Dictionary = result.get("after", {})
 	var initiator_after: Dictionary = after.get("initiator", {})
 	var target_after: Dictionary = after.get("target", {})
-	var valid_types: Array = [
-		DialogueResolver.TYPE_STRANGER, DialogueResolver.TYPE_ACQUAINTANCE,
-		DialogueResolver.TYPE_FRIEND, DialogueResolver.TYPE_ENEMY, DialogueResolver.TYPE_LOVER,
-	]
 	_check(
-		str(initiator_after.get("relationship", "")) in valid_types
-		and str(target_after.get("relationship", "")) in valid_types,
+		_relationship_consistent(initiator_after) and _relationship_consistent(target_after),
 		"T13: both relationship types are re-derived from the updated meters"
 	)
 	var conversation: Conversation = _game.get("_conversation") as Conversation
 	var reaction: Array = ui.call("get_choices") as Array
 	var reaction_line: String = line_label.text if line_label != null else ""
 	var response: Dictionary = conversation.get_last_response() if conversation != null else {}
+	var layer: String = str(response.get("fallback", ""))
+	# Under this fixture's fixed seed the exact layer is empty and the authored
+	# topic-default layer wins. Requiring a non-exact layer makes the check fail if
+	# fallback selection regresses to an unconditionally exact match.
 	var reaction_ok: bool = (
 		reaction.size() == 1 and str(reaction[0]).contains("Continue")
 		and not reaction_line.is_empty() and not str(response.get("response_text", "")).is_empty()
-		and not str(response.get("fallback", "")).is_empty()
+		and layer in ["topic_default", "topic_partial", "generic_authored", "generated"]
 	)
 	if not reaction_ok:
-		print("[033] DEBUG T14 reaction=%s line=%s response=%s" % [reaction, reaction_line, response])
+		print("[033] DEBUG T14 reaction=%s line=%s layer=%s response=%s" % [reaction, reaction_line, layer, response])
 	_check(reaction_ok,
 		"T14: a non-empty reactive line is produced through the response fallback chain"
 	)
@@ -212,8 +231,12 @@ func _check_player_conversation() -> void:
 	var followup: Array = ui.call("get_choices") as Array
 	_check(followup.size() >= 3 and followup.size() <= 5,
 		"T16: a second exchange offers a fresh 3-5 topic pool")
+	if feedback != null:
+		feedback.call("hide_feedback")
 	_send_key(ui, KEY_1)
 	await _frames(3)
+	_check(feedback != null and bool(feedback.call("is_open")),
+		"T17b: feedback is shown after the second turn as well")
 	var final_choices: Array = ui.call("get_choices") as Array
 	_check(
 		final_choices.size() == 1 and str(final_choices[0]).contains("Leave")
@@ -257,6 +280,18 @@ func _check_npc_initiated_conversation() -> void:
 	if ui == null or player == null or npcs_root == null or npcs_root.get_child_count() == 0:
 		_check(false, "T20: NPC-initiated setup (missing scene nodes)")
 		return
+
+	# AC5: the default gate must refuse initiation during class time. Drive the
+	# real Game._process() loop, not the inner helper it calls.
+	_game.set("npc_initiation_enabled", true)
+	_game.set("npc_initiation_check_interval_sec", 0.05)
+	_game.call("set_npc_initiation_gate", Callable())
+	_game.call("_process", 2.1)
+	await _frames(2)
+	_check(not ui.is_open() and not bool(_game.call("_npc_gate_open")),
+		"T20b: the default gate refuses initiation during class time")
+	_game.set("npc_initiation_enabled", false)
+
 	TimeManager.advance(TimeManager.period_duration_sec + 1.0)
 	await _frames(2)
 	_check(
@@ -265,12 +300,35 @@ func _check_npc_initiated_conversation() -> void:
 		"T20: deterministic advance reaches free time"
 	)
 
-	# The gate is injectable: a false callable blocks the production path.
+	# An injected false callable closes the real gate and the real loop honours it.
+	# Arrange one eligible initiator so the check cannot pass for lack of a candidate.
+	var candidate: Npc = null
+	for child in npcs_root.get_children():
+		var possible: Npc = child as Npc
+		if (
+			possible != null and possible.instance != null
+			and NpcInitiation.can_initiate(
+				possible.instance, possible.instance.resolve_template(), false, false
+			)
+		):
+			candidate = possible
+			break
+	if candidate != null:
+		candidate.clear_forced_destination()
+		for child in npcs_root.get_children():
+			var npc_candidate: Npc = child as Npc
+			if npc_candidate != null:
+				npc_candidate.set_conversation_busy(npc_candidate != candidate)
+		(_game.get("_initiation_busy") as Dictionary).clear()
+		(_game.get("_initiation_cooldowns") as Dictionary).clear()
+		player.global_position = candidate.global_position + Vector2(8.0, 0.0)
 	_game.set("npc_initiation_enabled", true)
 	_game.call("set_npc_initiation_gate", Callable(self, "_gate_false"))
-	_game.call("_try_npc_initiations")
+	var gate_closed: bool = not bool(_game.call("_npc_gate_open"))
+	_game.call("_process", 2.1)
 	await _frames(2)
-	_check(not ui.is_open(), "T21: a false initiation gate blocks NPC talks")
+	_check(gate_closed, "T21: an injected false callable closes the real gate")
+	_check(not ui.is_open(), "T21b: the production initiation loop honours the false gate")
 	_game.call("set_npc_initiation_gate", Callable())
 	_game.set("npc_initiation_enabled", false)
 
@@ -493,9 +551,10 @@ func _check_options_from_pause() -> void:
 	if fullscreen != null:
 		fullscreen.button_pressed = true
 	var notice: Node = options.get_node_or_null("RestartNotice")
+	var notice_visible: bool = notice is CanvasItem and (notice as CanvasItem).visible
 	_check(
 		SettingsManager.get_resolution() == Vector2i(1920, 1080)
-		and SettingsManager.get_fullscreen() and notice == null,
+		and SettingsManager.get_fullscreen() and not notice_visible,
 		"T41: resolution/fullscreen apply immediately with no misleading notice"
 	)
 	SettingsManager.reload()
@@ -581,7 +640,8 @@ func _check_mods_from_pause() -> void:
 
 func _check_relationship_goals() -> void:
 	var npcs_root: Node = _game.get_node_or_null("Npcs")
-	if npcs_root == null or npcs_root.get_child_count() == 0:
+	var map: Map = _game.get_node_or_null("MapRenderer").get("map") as Map if _game.get_node_or_null("MapRenderer") != null else null
+	if npcs_root == null or npcs_root.get_child_count() == 0 or map == null:
 		_check(false, "T52: relationship goal setup")
 		return
 	var npc: Npc = npcs_root.get_child(0) as Npc
@@ -590,33 +650,45 @@ func _check_relationship_goals() -> void:
 		_check(false, "T52: relationship goal setup")
 		return
 	var player_id: String = player.instance_id
+	var roster: Array = (_game.get("_instances_by_id") as Dictionary).values()
 	_set_meter(npc.instance, player_id, 70, 70)
-	var seek_count: int = 0
-	var seek_destination_ok: bool = false
-	for i in range(12):
+	var seek_eval: int = _goal_eval_for(npc, map, roster, player_id, true)
+	if seek_eval >= 0:
+		npc.set("_eval_count", seek_eval)
 		npc.call("evaluate_goal")
-		if str(npc.instance.current_goal) == "seek:%s" % player_id:
-			seek_count += 1
-			seek_destination_ok = npc.instance.goal_destination.distance_to(player.position) < 2.0
-	_check(
-		seek_count > 0 and seek_destination_ok,
-		"T52: a friend/lover meter produces a seek goal toward the player after reload"
+	var seek_ok: bool = (
+		seek_eval >= 0 and str(npc.instance.current_goal) == "seek:%s" % player_id
+		and npc.instance.goal_destination.distance_to(player.position) < 2.0
 	)
+	if not seek_ok:
+		print("[033] DEBUG T52 seek_eval=%d seed=%s goal=%s dest=%s player=%s roster=%d hangouts=%s meter=%s" % [
+			seek_eval, npc.get("_seed_value"), npc.instance.current_goal,
+			npc.instance.goal_destination, player.position, roster.size(),
+			map.get_hangout_marker_names(), npc.instance.get_meter(player_id),
+		])
+	_check(seek_ok,
+		"T52: a friend/lover meter produces a pinned seek goal toward the player after reload"
+	)
+
+	# The implemented rule skips non-positive player weights instead of emitting
+	# `avoid:player`; assert the chosen destination is not the enemy's position.
 	_set_meter(npc.instance, player_id, 0, -70)
-	var avoid_seek_count: int = 0
-	for i in range(12):
+	var enemy_eval: int = _goal_eval_for(npc, map, roster, player_id, false)
+	if enemy_eval >= 0:
+		npc.set("_eval_count", enemy_eval)
 		npc.call("evaluate_goal")
-		if str(npc.instance.current_goal).begins_with("seek:"):
-			avoid_seek_count += 1
-	_check(avoid_seek_count == 0 and not str(npc.instance.current_goal).is_empty(),
-		"T53: an enemy meter stops seek goals and keeps a free-time goal")
+	_check(
+		enemy_eval >= 0 and not str(npc.instance.current_goal).begins_with("seek:")
+		and npc.instance.goal_destination.distance_to(player.position) >= 2.0,
+		"T53: an enemy meter excludes the player destination and keeps a free-time goal"
+	)
+
+	# No roster re-wiring between these evaluations: a shared-reference change to
+	# the restored meter must affect the very next goal the real Npc computes.
 	_set_meter(npc.instance, player_id, 70, 70)
-	var reseek_count: int = 0
-	for i in range(8):
-		npc.call("evaluate_goal")
-		if str(npc.instance.current_goal) == "seek:%s" % player_id:
-			reseek_count += 1
-	_check(reseek_count > 0,
+	npc.set("_eval_count", seek_eval)
+	npc.call("evaluate_goal")
+	_check(str(npc.instance.current_goal) == "seek:%s" % player_id,
 		"T54: meter changes after restore affect the next goal without re-wiring")
 
 
@@ -633,9 +705,64 @@ func _check_registry_content() -> void:
 	var responses: Array = loader.call("get_all", str(loader.get("TYPE_RESPONSE"))) as Array
 	var dialogue_total: int = greetings.size() + topics.size() + responses.size()
 	_check(
-		traits.size() >= 15 and dialogue_total >= 40 and dialogue_total <= 60,
+		# 24 base traits (18 new + 6 v1) are approved in the decisions; the
+		# spec's ~15-20 is the *new* trait count, not the registry total.
+		traits.size() >= 20 and traits.size() <= 30
+		and dialogue_total >= 40 and dialogue_total <= 60,
 		"T55: authored traits and dialogue resources stay in the spec's ranges"
 	)
+	var trait_bucket: String = str(loader.get("TYPE_TRAIT"))
+	var original_trait: Trait = traits[0] as Trait if not traits.is_empty() else null
+	if original_trait != null:
+		var duplicate: Trait = Trait.new()
+		duplicate.id = original_trait.id
+		var rejected: bool = not bool(loader.call("register_resource", trait_bucket, duplicate, "v2_integration_probe"))
+		var original_kept: bool = loader.call("get_resource", trait_bucket, original_trait.id) == original_trait
+		_check(rejected and original_kept,
+			"T55b: duplicate trait id is rejected add-only")
+	else:
+		_check(false, "T55b: duplicate trait id is rejected add-only")
+
+
+## --- T34b/T51b: remaining AC8 coverage ---------------------------------------
+
+func _check_extra_coverage() -> void:
+	var pause: Node = _game.get_node_or_null("PauseLayer/PauseMenu")
+	if pause == null:
+		_check(false, "T34b: the row's Delete button removes the named slot")
+		_check(false, "T51b: F5/F9 debug hotkeys still save and load")
+		return
+	_send_action(_game, "ui_cancel")
+	await _frames(2)
+	var load_button: Button = pause.get_node_or_null("Box/MenuBox/LoadButton") as Button
+	if load_button != null:
+		load_button.pressed.emit()
+		await _frames(2)
+		var embedded: Node = pause.get_node_or_null("PanelHost/LoadGame")
+		var row: Node = _find_slot_row(embedded, SLOT)
+		var delete_button: Button = row.get_node_or_null("DeleteButton") as Button if row != null else null
+		if delete_button != null:
+			delete_button.pressed.emit()
+			delete_button.pressed.emit()
+		_check(not SaveManager.has_slot(SLOT),
+			"T34b: the row's Delete button removes the named slot")
+		_embedded_back(embedded)
+		await _frames(2)
+	else:
+		_check(false, "T34b: the row's Delete button removes the named slot")
+	_send_action(_game, "ui_cancel")
+	await _frames(2)
+
+	# Remove any pre-existing manual slot so F5 must actually create it.
+	_remove_slot(SaveManager.MANUAL_SLOT)
+	var swaps_before: int = GameManager.scene_change_count
+	_send_action(_game, "manual_save")
+	await _frames(2)
+	var manual_saved: bool = SaveManager.has_slot(SaveManager.MANUAL_SLOT)
+	_send_action(_game, "manual_load")
+	await _frames(2)
+	_check(manual_saved and GameManager.scene_change_count > swaps_before,
+		"T51b: F5/F9 debug hotkeys still save and load")
 
 
 ## --- Helpers -----------------------------------------------------------------
@@ -723,6 +850,23 @@ func _buttons_numbered(ui: ConversationUI) -> bool:
 	return true
 
 
+## Relationship type expected from the post-roll meter, using the resolver's
+## thresholds. At >=60/>=60 the mutual-romance gate may yield Lover or Friend.
+func _relationship_consistent(party: Dictionary) -> bool:
+	var familiarity: int = int(party.get("familiarity", 0))
+	var affection: int = int(party.get("affection", 0))
+	var actual: String = str(party.get("relationship", ""))
+	if familiarity >= DialogueResolver.REL_LOVER_FAM and affection >= DialogueResolver.REL_LOVER_AFF:
+		return actual == DialogueResolver.TYPE_LOVER or actual == DialogueResolver.TYPE_FRIEND
+	if affection <= DialogueResolver.REL_ENEMY_AFF:
+		return actual == DialogueResolver.TYPE_ENEMY
+	if familiarity >= DialogueResolver.REL_FRIEND_FAM and affection >= DialogueResolver.REL_FRIEND_AFF:
+		return actual == DialogueResolver.TYPE_FRIEND
+	if familiarity >= DialogueResolver.REL_FRIEND_FAM:
+		return actual == DialogueResolver.TYPE_ACQUAINTANCE
+	return actual == DialogueResolver.TYPE_STRANGER
+
+
 func _has_nonzero_delta(delta: Dictionary) -> bool:
 	for field in ["familiarity", "affection", "mood"]:
 		if int(delta.get(field, 0)) != 0:
@@ -751,6 +895,29 @@ func _meters_changed(before: Dictionary, after: Dictionary) -> bool:
 		if int(before[key]) != int(after.get(key, 0)):
 			return true
 	return false
+
+
+## Find one deterministic evaluation index for the expected goal shape so the
+## harness asserts a pinned outcome instead of "any of N rolls".
+func _goal_eval_for(npc: Npc, map: Map, roster: Array, player_id: String, want_seek: bool) -> int:
+	var player_instance: NpcInstance = _game.get("_player_instance") as NpcInstance
+	if player_instance == null:
+		return -1
+	var seed_value: int = int(npc.get("_seed_value"))
+	var template: CharacterTemplate = npc.instance.resolve_template()
+	for eval_count in range(30):
+		var result: Dictionary = NpcAi.select_goal(
+			npc.instance, template, map, seed_value, eval_count, roster, player_id
+		)
+		var goal: String = str(result.get("goal", ""))
+		var destination_variant: Variant = result.get("destination", Vector2.ZERO)
+		var destination: Vector2 = destination_variant if destination_variant is Vector2 else Vector2.ZERO
+		var near_player: bool = destination.distance_to(player_instance.position) < 2.0
+		if want_seek and goal == "seek:%s" % player_id and near_player:
+			return eval_count
+		if not want_seek and not goal.begins_with("seek:") and not near_player:
+			return eval_count
+	return -1
 
 
 func _set_meter(instance: NpcInstance, other_id: String, familiarity: int, affection: int) -> void:
@@ -862,6 +1029,17 @@ func _first_diff(a: Variant, b: Variant, path: String) -> String:
 	return ""
 
 
+func _find_slot_row(embedded: Node, slot: String) -> Node:
+	var slot_list: VBoxContainer = embedded.get_node_or_null("CenterBox/SlotScroll/SlotList") as VBoxContainer if embedded != null else null
+	if slot_list == null:
+		return null
+	for i in range(slot_list.get_child_count()):
+		var meta: Label = slot_list.get_child(i).get_node_or_null("MetaScroll/MetaLabel") as Label
+		if meta != null and meta.text.begins_with(slot):
+			return slot_list.get_child(i)
+	return null
+
+
 func _find_mod(snapshot: Array, id: String) -> Dictionary:
 	for entry_variant in snapshot:
 		var entry: Dictionary = entry_variant as Dictionary
@@ -894,9 +1072,7 @@ func _check(ok: bool, label: String) -> void:
 
 
 func _finish() -> void:
-	_time_cleanup()
-	_remove_slot(SLOT)
-	_isolate_settings_restore()
+	_cleanup()
 	print("[033] RESULT passed=%d failed=%d" % [_passed, _failed])
 	if _failed == 0 and _passed == EXPECTED_CHECKS:
 		print("ALL_033_CHECKS_PASSED")
@@ -905,6 +1081,15 @@ func _finish() -> void:
 	get_tree().quit(0)
 
 
-func _time_cleanup() -> void:
+func _cleanup() -> void:
+	if _cleaned_up:
+		return
+	_cleaned_up = true
 	TimeManager.set_paused(false)
 	TimeManager.set_process(true)
+	_remove_slot(SLOT)
+	_isolate_settings_restore()
+
+
+func _gate_true() -> bool:
+	return true

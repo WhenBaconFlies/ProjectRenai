@@ -17,8 +17,9 @@
 
 ## Verification (2026-11-25)
 
-- New harness: `tests/V2IntegrationBootstrap.tscn/.gd`, `tests/V2IntegrationTest.gd`, `tests/run_v2_integration_tests.ps1`; 56/56 checks, `ALL_033_CHECKS_PASSED`, `V2_INTEGRATION_033_OK`.
-- RED/GREEN proof (two-pick limit + reactive-line core check): with `Conversation.MAX_TURNS` temporarily set to `3`, T17 failed with `passed=54 failed=2`, `SOME_033_CHECKS_FAILED` / `V2_INTEGRATION_033_FAILED`; restored to `2` → 56/56 GREEN.
+- New harness: `tests/V2IntegrationBootstrap.tscn/.gd`, `tests/V2IntegrationTest.gd`, `tests/run_v2_integration_tests.ps1`; 63/63 checks, `ALL_033_CHECKS_PASSED`, `V2_INTEGRATION_033_OK`.
+- RED/GREEN proof (two-pick limit, T17 + the self-referential count check): with `Conversation.MAX_TURNS` temporarily set to `3`, T17 failed with `passed=54 failed=2`, `SOME_033_CHECKS_FAILED` / `V2_INTEGRATION_033_FAILED`; restored to `2` → 56/56 GREEN. The reactive line is asserted by T14 but was not mutated.
 - Regressions: all 15 harnesses 018–032 green (`INTEGRATION_018_OK`, `CHUNKMANAGER_019_OK`, `CHUNK_020_OK`, `DIALOGUE_021_OK`, `TRAITS_DIALOGUE_022_OK`, `CONVERSATION_023_OK`, `CONVERSATION_024_OK`, `SETTINGS_MANAGER_025_OK`, `MAIN_MENU_026_OK`, `LOAD_GAME_027_OK`, `PAUSE_MENU_028_OK`, `MODLOADER_DUAL_ROOT_029_OK`, `OPTIONS_030_OK`, `MODS_MENU_031_OK`, `NPC_GOALS_032_OK`).
 - Config/slot isolation: harness writes only `user://v2_integration_settings.cfg` and slot `v2_integration`, both removed on finish.
+- Code review: `doc/code-review/codereview-ticket-033-v2-integration-and-regressions.md` (12 evidence-backed findings, all applied). Mutation proofs covered T14/T20b/T21b/T13/T34b/T51b/T55b plus the abort/watchdog path; all production mutations were reverted and the suite re-verified green.
 - Awaiting user verification and final push approval; no push or GitHub issue change yet.
