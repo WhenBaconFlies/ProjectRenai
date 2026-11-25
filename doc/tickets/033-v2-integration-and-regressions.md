@@ -4,7 +4,7 @@
 
 **Blocked by:** 024 (ConversationUI overlay + Game wiring), 027 (Load Game named-slot UI), 028 (Pause Menu + Escape gate), 030 (Options screen), 031 (Mods Menu), 032 (Relationship-driven NPC goals)
 
-**Status:** verified-awaiting-user-approval
+**Status:** complete
 
 - [x] One harness covers every v2 acceptance criterion via the real menu/conversation entry points
 - [x] Both conversation shapes, turn limits, fallbacks, meters/mood, and relationship updates are asserted
@@ -22,4 +22,4 @@
 - Regressions: all 15 harnesses 018–032 green (`INTEGRATION_018_OK`, `CHUNKMANAGER_019_OK`, `CHUNK_020_OK`, `DIALOGUE_021_OK`, `TRAITS_DIALOGUE_022_OK`, `CONVERSATION_023_OK`, `CONVERSATION_024_OK`, `SETTINGS_MANAGER_025_OK`, `MAIN_MENU_026_OK`, `LOAD_GAME_027_OK`, `PAUSE_MENU_028_OK`, `MODLOADER_DUAL_ROOT_029_OK`, `OPTIONS_030_OK`, `MODS_MENU_031_OK`, `NPC_GOALS_032_OK`).
 - Config/slot isolation: harness writes only `user://v2_integration_settings.cfg` and slot `v2_integration`, both removed on finish.
 - Code review: `doc/code-review/codereview-ticket-033-v2-integration-and-regressions.md` (12 evidence-backed findings, all applied). Mutation proofs covered T14/T20b/T21b/T13/T34b/T51b/T55b plus the abort/watchdog path; all production mutations were reverted and the suite re-verified green.
-- Awaiting user verification and final push approval; no push or GitHub issue change yet.
+- Shipped 2026-11-25 with explicit user approval: branch `ticket/033-v2-integration-and-regressions` pushed, no-ff merge `1da8b0d` pushed to `origin/master`, GitHub issue #35 commented and closed as completed.
