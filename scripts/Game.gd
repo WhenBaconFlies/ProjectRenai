@@ -171,6 +171,7 @@ func _ready() -> void:
 	else:
 		_setup_npcs()
 	_setup_player_instance()
+	_wire_relationship_roster()
 	_setup_dialogue()
 	_setup_feedback()
 	_setup_pause()
@@ -249,6 +250,18 @@ func _setup_player_instance() -> void:
 	_instances_by_id[_player_instance.instance_id] = _player_instance
 
 
+## Ticket 032: give every NPC the live instance roster so NpcAi can weight
+## free-time goals with directed meters toward other NPCs and the player. The
+## instances are shared by reference; meter changes are visible on the next
+## re-evaluation without re-wiring.
+func _wire_relationship_roster() -> void:
+	var roster: Array = _instances_by_id.values()
+	for npc_variant in _npcs:
+		var npc: Npc = npc_variant as Npc
+		if npc != null:
+			npc.set_relationship_roster(roster, _player_id())
+
+
 ## --- Ticket 019: tiered simulation ------------------------------------------
 
 ## Hand the spawned/restored NPCs and the player focus to ChunkManager. Tiers
@@ -313,6 +326,9 @@ func _restore_from_save(save: SaveGame) -> void:
 		# Player._ready() queues _snap_to_spawn() before this parent _ready() runs.
 		# Queue ours afterwards so the saved position wins over the map spawn.
 		call_deferred("_apply_restored_player_position")
+	# The restored player is a fresh instance; refresh the roster before AI sync
+	# so seek/avoid toward the player uses the saved meters, not the pre-load one.
+	_wire_relationship_roster()
 
 	set_relationship_feedback_enabled(save.show_relationship_feedback)
 	# restore_day_snapshot() assigns state directly and emits no state_changed,

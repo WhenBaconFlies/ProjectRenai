@@ -4,11 +4,11 @@
 
 **Blocked by:** 022 (Traits + full dialogue content)
 
-**Status:** ready-for-agent
+**Status:** complete
 
-- [ ] `NpcAi` uses directed meters to weight goal selection toward friends/love interests
-- [ ] NPCs with strongly negative affection avoid those characters' hangouts
-- [ ] Interest/mood goals still fire when no relationship candidate qualifies
-- [ ] Selection remains seeded and headless-reproducible
-- [ ] No crash when meters are empty or a hangout marker is missing
-- [ ] Headless checks demonstrate seek and avoid behavior with authored meters
+- [x] `NpcAi` uses directed meters to weight goal selection toward friends/love interests
+- [x] NPCs with strongly negative affection avoid those characters' hangouts
+- [x] Interest/mood goals still fire when no relationship candidate qualifies
+- [x] Selection remains seeded and headless-reproducible
+- [x] No crash when meters are empty or a hangout marker is missing
+- [x] Headless checks demonstrate seek and avoid behavior with authored meters
